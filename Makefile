@@ -27,9 +27,13 @@ help:
 	@echo "  migrate      - Run database migrations"
 	@echo ""
 	@echo "Development:"
-	@echo "  api-shell    - Enter API container shell"
-	@echo "  db-shell     - Enter PostgreSQL shell"
-	@echo "  test         - Run tests"
+	@echo "  api-shell       - Enter API container shell"
+	@echo "  db-shell        - Enter PostgreSQL shell"
+	@echo "  test            - Run all tests"
+	@echo "  test-unit       - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  test-e2e        - Run E2E tests only"
+	@echo "  test-cov        - Run tests with coverage report"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean        - Remove local artifacts (node_modules, __pycache__)"
@@ -124,9 +128,25 @@ api-shell:
 db-shell:
 	docker compose exec postgres psql -U mindbase -d mindbase
 
-## test: テスト実行
+## test: 全テスト実行
 test:
 	docker compose exec api pytest tests/ -v
+
+## test-unit: ユニットテストのみ
+test-unit:
+	docker compose exec api pytest tests/unit -v -m unit
+
+## test-integration: 統合テストのみ
+test-integration:
+	docker compose exec api pytest tests/integration -v -m integration
+
+## test-e2e: E2Eテストのみ
+test-e2e:
+	docker compose exec api pytest tests/e2e -v -m e2e
+
+## test-cov: カバレッジレポート付きテスト
+test-cov:
+	docker compose exec api pytest tests/ -v --cov=app --cov=collectors --cov-report=html --cov-report=term-missing
 
 ## clean: ローカル成果物削除
 clean:

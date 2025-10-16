@@ -8,7 +8,10 @@
     "optimize": "bash scripts/optimize-dotclaude/optimize.sh",
     "extract": "tsx src/processors/extract-modules.ts",
     "generate": "tsx src/generators/generate-article.ts",
-    "publish": "tsx src/generators/publish-qiita.ts"
+    "publish": "tsx src/generators/publish-qiita.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'TypeScript linting not configured yet'",
+    "test": "echo 'TypeScript tests not configured yet'"
   },
   "keywords": [
     "claude-code",
