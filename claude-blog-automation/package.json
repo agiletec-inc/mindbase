@@ -1,0 +1,18 @@
+{
+  "name": "claude-blog-automation",
+  "version": "1.0.0",
+  "description": "Claude Code conversation history to blog articles",
+  "type": "module",
+  "scripts": {
+    "extract": "tsx scripts/extract-modules.ts",
+    "generate": "tsx scripts/generate-article.ts",
+    "publish": "tsx scripts/publish-qiita.ts"
+  },
+  "keywords": ["claude-code", "blog-automation", "qiita"],
+  "author": "kazuki",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.2"
+  }
+}

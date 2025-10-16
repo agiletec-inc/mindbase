@@ -1,0 +1,27 @@
+{
+  "name": "mindbase",
+  "version": "1.0.0",
+  "description": "AI Conversation Knowledge Management - Archive, Extract, Generate, Publish",
+  "type": "module",
+  "scripts": {
+    "archive": "bash scripts/archive/archive-conversations.sh",
+    "optimize": "bash scripts/optimize-dotclaude/optimize.sh",
+    "extract": "tsx src/processors/extract-modules.ts",
+    "generate": "tsx src/generators/generate-article.ts",
+    "publish": "tsx src/generators/publish-qiita.ts"
+  },
+  "keywords": [
+    "claude-code",
+    "mindbase",
+    "blog-automation",
+    "conversation-archive",
+    "qiita",
+    "zenn"
+  ],
+  "author": "kazuki",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.2"
+  }
+}

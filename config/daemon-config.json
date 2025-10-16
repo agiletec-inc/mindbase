@@ -1,0 +1,102 @@
+{
+  "sync_schedule": "0 */6 * * *",
+  "batch_size": 50,
+  "sources": [
+    "claude-desktop",
+    "chatgpt", 
+    "cursor",
+    "windsurf",
+    "claude-code"
+  ],
+  "enabled_sources": [
+    "claude-desktop"
+  ],
+  "max_conversation_age_days": 30,
+  "retry_attempts": 3,
+  "retry_delay_seconds": 60,
+  "health_check_interval": 300,
+  "log_level": "INFO",
+  "dry_run": false,
+  "collection_settings": {
+    "claude_desktop": {
+      "data_paths": [
+        "~/Library/Application Support/Claude/conversations.db",
+        "~/Library/Application Support/Claude/conversations.json"
+      ],
+      "table_names": ["conversations", "chats", "messages"],
+      "min_confidence": 0.7
+    },
+    "chatgpt": {
+      "data_paths": [
+        "~/Library/Application Support/com.openai.chat/conversations.db",
+        "~/AppData/Roaming/OpenAI/ChatGPT/conversations.db"
+      ],
+      "enabled": false,
+      "note": "Implementation pending - needs ChatGPT data format analysis"
+    },
+    "cursor": {
+      "data_paths": [
+        "~/Library/Application Support/Cursor/conversations.db",
+        "~/.cursor/chat_history.json"
+      ],
+      "enabled": false,
+      "note": "Implementation pending - needs Cursor data format analysis"
+    },
+    "windsurf": {
+      "data_paths": [
+        "~/Library/Application Support/WindSurf/conversations.db"
+      ],
+      "enabled": false,
+      "note": "Implementation pending - needs WindSurf data format analysis"
+    },
+    "claude_code": {
+      "mcp_memory_integration": true,
+      "enabled": false,
+      "note": "Requires MCP Memory server integration"
+    }
+  },
+  "analysis_settings": {
+    "auto_analyze": true,
+    "pattern_extraction": {
+      "min_confidence": 0.7,
+      "depth": "standard",
+      "pattern_types": [
+        "business-idea",
+        "technical-solution", 
+        "creative-concept",
+        "problem-analysis",
+        "architectural-design",
+        "optimization-strategy",
+        "learning-insight",
+        "decision-framework",
+        "workflow-improvement"
+      ]
+    },
+    "embedding_generation": true,
+    "classification": true
+  },
+  "book_synthesis": {
+    "auto_synthesis": false,
+    "synthesis_schedule": "0 0 * * 0",
+    "min_patterns_for_synthesis": 5,
+    "content_style": "hybrid",
+    "synthesis_mode": "incremental"
+  },
+  "monitoring": {
+    "enable_metrics": true,
+    "log_retention_days": 30,
+    "alert_on_sync_failure": true,
+    "performance_monitoring": true
+  },
+  "privacy": {
+    "local_processing_only": true,
+    "exclude_patterns": [
+      "password",
+      "api_key", 
+      "secret",
+      "token",
+      "private"
+    ],
+    "anonymize_personal_info": false
+  }
+}

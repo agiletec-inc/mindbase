@@ -1,0 +1,41 @@
+# MindBase FastAPI Requirements
+
+# Core FastAPI
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.16
+
+# Database
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+pgvector==0.3.6
+alembic==1.14.0
+
+# Ollama Client
+ollama==0.4.4
+
+# HTTP Client
+httpx==0.27.2
+aiohttp==3.11.7
+
+# Data Validation
+pydantic==2.10.2
+pydantic-settings==2.6.1
+
+# Utilities
+python-dotenv==1.0.1
+python-dateutil==2.9.0
+
+# Logging & Monitoring
+structlog==24.4.0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pytest-httpx==0.34.0
+
+# Development
+black==24.10.0
+ruff==0.8.2
+mypy==1.13.0

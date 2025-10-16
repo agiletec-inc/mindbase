@@ -1,0 +1,55 @@
+name: mindbase
+
+services:
+  # PostgreSQL 17 + pgvector
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: mindbase-postgres
+    environment:
+      POSTGRES_USER: mindbase
+      POSTGRES_PASSWORD: mindbase_dev
+      POSTGRES_DB: mindbase
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-15433}:5432"  # High port to avoid conflicts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mindbase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # FastAPI Backend - REST API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mindbase-api
+    ports:
+      - "${API_PORT:-18002}:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://mindbase:mindbase_dev@postgres:5432/mindbase
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - EMBEDDING_MODEL=qwen3-embedding:8b
+      - EMBEDDING_DIMENSIONS=1024
+      - DEBUG=${DEBUG:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app:rw
+      - /Users/kazuki/github:/workspace/github:ro  # Read-only access for collectors
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local
