@@ -137,7 +137,7 @@ jobs:
       - name: Checkout tap repository
         uses: actions/checkout@v4
         with:
-          repository: kazukinakai/homebrew-mindbase
+          repository: agiletec-inc/homebrew-mindbase
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
           path: tap
 

@@ -1,10 +1,10 @@
 class Mindbase < Formula
   desc "AI conversation knowledge management system with MCP integration"
-  homepage "https://github.com/kazukinakai/mindbase"
-  url "https://github.com/kazukinakai/mindbase/archive/refs/tags/v1.0.0.tar.gz"
+  homepage "https://github.com/agiletec-inc/mindbase"
+  url "https://github.com/agiletec-inc/mindbase/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "" # Will be calculated on release
   license "MIT"
-  head "https://github.com/kazukinakai/mindbase.git", branch: "main"
+  head "https://github.com/agiletec-inc/mindbase.git", branch: "master"
 
   depends_on "python@3.12"
   depends_on "postgresql@16"

@@ -8,7 +8,7 @@ Complete installation guide for MindBase - AI Conversation Knowledge Management 
 
 ```bash
 # Add MindBase tap
-brew tap kazukinakai/mindbase
+brew tap agiletec-inc/mindbase
 
 # Install MindBase
 brew install mindbase
@@ -59,7 +59,7 @@ brew services start ollama
 
 ```bash
 # Clone repository
-git clone https://github.com/kazukinakai/mindbase.git
+git clone https://github.com/agiletec-inc/mindbase.git
 cd mindbase
 
 # Run installation script
@@ -250,7 +250,7 @@ For contributing to MindBase development, see [CLAUDE.md](CLAUDE.md) for Docker 
 
 ```bash
 # Clone repository
-git clone https://github.com/kazukinakai/mindbase.git
+git clone https://github.com/agiletec-inc/mindbase.git
 cd mindbase
 
 # Start Docker development environment (port 18003)
@@ -331,5 +331,5 @@ chmod +x ~/.local/bin/mindbase
 ## Support
 
 - **Documentation**: [CLAUDE.md](CLAUDE.md)
-- **Issues**: [GitHub Issues](https://github.com/kazukinakai/mindbase/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/kazukinakai/mindbase/discussions)
+- **Issues**: [GitHub Issues](https://github.com/agiletec-inc/mindbase/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/agiletec-inc/mindbase/discussions)
