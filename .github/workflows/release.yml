@@ -40,16 +40,10 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Create tarball
+      - name: Download GitHub tarball
         run: |
-          tar -czf mindbase-${{ steps.version.outputs.VERSION }}.tar.gz \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='__pycache__' \
-            --exclude='.pytest_cache' \
-            --exclude='dist' \
-            --exclude='.env' \
-            .
+          curl -L https://github.com/${{ github.repository }}/archive/refs/tags/v${{ steps.version.outputs.VERSION }}.tar.gz \
+            -o mindbase-${{ steps.version.outputs.VERSION }}.tar.gz
 
       - name: Calculate SHA256
         id: sha
