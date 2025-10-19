@@ -117,7 +117,6 @@ jobs:
           files: |
             mindbase-${{ steps.version.outputs.VERSION }}.tar.gz
             Formula/mindbase.rb
-            VERSION
           draft: false
           prerelease: false
         env:
