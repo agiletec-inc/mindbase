@@ -1,0 +1,99 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: mindbase
+          POSTGRES_PASSWORD: mindbase_dev
+          POSTGRES_DB: mindbase_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Install TypeScript dependencies
+        run: pnpm install
+
+      - name: Run Python tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://mindbase:mindbase_dev@localhost:5432/mindbase_test
+          OLLAMA_URL: http://localhost:11434
+        run: |
+          pytest tests/ -v --cov=app --cov=collectors --cov-report=xml
+
+      - name: Run TypeScript type check
+        run: pnpm typecheck
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install linters
+        run: |
+          pip install black ruff mypy
+
+      - name: Run Black
+        run: black --check app/ collectors/
+
+      - name: Run Ruff
+        run: ruff check app/ collectors/
+
+      - name: Run mypy
+        run: mypy app/ collectors/

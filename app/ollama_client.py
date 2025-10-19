@@ -45,6 +45,57 @@ class OllamaClient:
             embeddings.append(embedding)
         return embeddings
 
+    async def list_models(self) -> list[str]:
+        """
+        List all installed Ollama models
+
+        Returns:
+            List of installed model names
+        """
+        try:
+            response = self.client.list()
+            # Extract model names from response
+            models = [model["name"] for model in response.get("models", [])]
+            return models
+        except Exception as e:
+            print(f"Error listing models: {e}")
+            return []
+
+    async def pull_model(self, model_name: str) -> bool:
+        """
+        Pull (download) a model from Ollama registry
+
+        Args:
+            model_name: Model to download (e.g., "qwen3-embedding:8b")
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Note: ollama.pull() is synchronous
+            self.client.pull(model_name)
+            return True
+        except Exception as e:
+            print(f"Error pulling model {model_name}: {e}")
+            return False
+
+    async def delete_model(self, model_name: str) -> bool:
+        """
+        Delete an installed model
+
+        Args:
+            model_name: Model to delete
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.client.delete(model_name)
+            return True
+        except Exception as e:
+            print(f"Error deleting model {model_name}: {e}")
+            return False
+
 
 # Global client instance
 ollama_client = OllamaClient()

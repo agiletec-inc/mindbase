@@ -25,6 +25,7 @@ pydantic-settings==2.6.1
 # Utilities
 python-dotenv==1.0.1
 python-dateutil==2.9.0
+psutil==6.1.0  # Hardware detection for model recommendations
 
 # Logging & Monitoring
 structlog==24.4.0

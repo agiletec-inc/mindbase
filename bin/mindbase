@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""MindBase CLI - AI Conversation Knowledge Management System"""
+
+import sys
+import os
+from pathlib import Path
+
+
+def print_help():
+    """Print help message"""
+    print("""
+MindBase - AI Conversation Knowledge Management System
+
+Usage:
+    mindbase serve              Start FastAPI server
+    mindbase migrate            Run database migrations
+    mindbase setup              Initial setup (create DB, pull models)
+    mindbase version            Show version
+    mindbase health             Check service health
+    mindbase help               Show this help
+
+Environment:
+    DATABASE_URL                PostgreSQL connection string
+    OLLAMA_URL                  Ollama API endpoint (default: http://localhost:11434)
+    API_PORT                    API server port (default: 18002)
+    DATA_DIR                    Data directory (default: ~/Library/Application Support/mindbase)
+""")
+
+
+def serve():
+    """Start FastAPI server"""
+    import uvicorn
+
+    port = int(os.getenv("API_PORT", "18002"))
+    host = os.getenv("API_HOST", "0.0.0.0")
+
+    print(f"🚀 Starting MindBase API on {host}:{port}")
+    print(f"📖 API Docs: http://localhost:{port}/docs")
+
+    uvicorn.run(
+        "app.main:app",
+        host=host,
+        port=port,
+        reload=False,
+        log_level="info"
+    )
+
+
+def migrate():
+    """Run database migrations"""
+    import subprocess
+
+    print("🔄 Running database migrations...")
+
+    # Get project root (where alembic.ini is located)
+    project_root = Path(__file__).parent.parent
+
+    try:
+        subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd=project_root,
+            check=True
+        )
+        print("✅ Migrations completed successfully")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Migration failed: {e}")
+        sys.exit(1)
+
+
+def setup():
+    """Initial setup"""
+    import subprocess
+
+    print("🔧 MindBase Initial Setup")
+
+    # 1. Check PostgreSQL
+    print("\n1️⃣ Checking PostgreSQL...")
+    try:
+        subprocess.run(["psql", "--version"], check=True, capture_output=True)
+        print("✅ PostgreSQL found")
+    except FileNotFoundError:
+        print("❌ PostgreSQL not found. Install with: brew install postgresql@16")
+        sys.exit(1)
+
+    # 2. Create database
+    print("\n2️⃣ Creating database...")
+    try:
+        subprocess.run(
+            ["createdb", "mindbase"],
+            check=False  # Don't fail if already exists
+        )
+        print("✅ Database created (or already exists)")
+    except Exception as e:
+        print(f"⚠️ Database creation skipped: {e}")
+
+    # 3. Enable pgvector extension
+    print("\n3️⃣ Enabling pgvector extension...")
+    try:
+        subprocess.run(
+            ["psql", "mindbase", "-c", "CREATE EXTENSION IF NOT EXISTS vector;"],
+            check=True,
+            capture_output=True
+        )
+        print("✅ pgvector extension enabled")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to enable pgvector: {e}")
+        sys.exit(1)
+
+    # 4. Check Ollama
+    print("\n4️⃣ Checking Ollama...")
+    try:
+        subprocess.run(["ollama", "--version"], check=True, capture_output=True)
+        print("✅ Ollama found")
+    except FileNotFoundError:
+        print("❌ Ollama not found. Install with: brew install ollama")
+        sys.exit(1)
+
+    # 5. Pull embedding model
+    print("\n5️⃣ Pulling embedding model (qwen3-embedding:8b)...")
+    print("   This may take a few minutes (~4.7GB)...")
+    try:
+        subprocess.run(
+            ["ollama", "pull", "qwen3-embedding:8b"],
+            check=True
+        )
+        print("✅ Embedding model ready")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to pull model: {e}")
+        sys.exit(1)
+
+    # 6. Create data directory
+    print("\n6️⃣ Creating data directory...")
+    data_dir = Path(os.getenv(
+        "DATA_DIR",
+        Path.home() / "Library/Application Support/mindbase"
+    ))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    print(f"✅ Data directory: {data_dir}")
+
+    # 7. Run migrations
+    print("\n7️⃣ Running database migrations...")
+    migrate()
+
+    print("\n✨ Setup complete!")
+    print("\nNext steps:")
+    print("  1. Start service: mindbase serve")
+    print("  2. Or with brew: brew services start mindbase")
+    print("  3. Check health: curl http://localhost:18002/health")
+
+
+def health():
+    """Check service health"""
+    import requests
+
+    port = int(os.getenv("API_PORT", "18002"))
+    url = f"http://localhost:{port}/health"
+
+    print(f"🏥 Checking health at {url}")
+
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+
+        print("✅ Service is healthy")
+        print(f"   Status: {data.get('status')}")
+        print(f"   Database: {data.get('database')}")
+        print(f"   Ollama: {data.get('ollama')}")
+    except requests.exceptions.ConnectionError:
+        print("❌ Service is not running")
+        print("   Start with: mindbase serve")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Health check failed: {e}")
+        sys.exit(1)
+
+
+def version():
+    """Show version"""
+    print("MindBase v1.0.0")
+
+
+def main():
+    """Main CLI entrypoint"""
+    if len(sys.argv) < 2:
+        print_help()
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    commands = {
+        "serve": serve,
+        "migrate": migrate,
+        "setup": setup,
+        "health": health,
+        "version": version,
+        "help": print_help,
+        "--help": print_help,
+        "-h": print_help,
+    }
+
+    if command in commands:
+        commands[command]()
+    else:
+        print(f"❌ Unknown command: {command}")
+        print_help()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

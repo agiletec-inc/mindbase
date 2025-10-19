@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.api.routes import health, conversations
+from app.api.routes import health, conversations, embeddings
 
 settings = get_settings()
 
@@ -27,6 +27,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router)
 app.include_router(conversations.router)
+app.include_router(embeddings.router)
 
 
 @app.get("/")

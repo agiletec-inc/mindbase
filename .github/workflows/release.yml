@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pnpm install
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create tarball
+        run: |
+          tar -czf mindbase-${{ steps.version.outputs.VERSION }}.tar.gz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='__pycache__' \
+            --exclude='.pytest_cache' \
+            --exclude='dist' \
+            --exclude='.env' \
+            .
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          SHA256=$(sha256sum mindbase-${{ steps.version.outputs.VERSION }}.tar.gz | awk '{print $1}')
+          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+          echo "SHA256: $SHA256"
+
+      - name: Update Homebrew Formula
+        run: |
+          sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/refs/tags/v${{ steps.version.outputs.VERSION }}.tar.gz\"|" Formula/mindbase.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${{ steps.sha.outputs.SHA256 }}\"|" Formula/mindbase.rb
+
+      - name: Create Release Notes
+        id: notes
+        run: |
+          cat > RELEASE_NOTES.md << 'EOF'
+          ## MindBase v${{ steps.version.outputs.VERSION }}
+
+          ### Installation
+
+          ```bash
+          # Using Homebrew (recommended)
+          brew tap kazukinakai/mindbase
+          brew install mindbase
+
+          # Or download and install manually
+          curl -L https://github.com/${{ github.repository }}/archive/refs/tags/v${{ steps.version.outputs.VERSION }}.tar.gz -o mindbase.tar.gz
+          tar -xzf mindbase.tar.gz
+          cd mindbase-${{ steps.version.outputs.VERSION }}
+          bash scripts/install-local.sh
+          ```
+
+          ### Quick Start
+
+          ```bash
+          # Setup (creates DB, pulls Ollama model)
+          mindbase setup
+
+          # Start service
+          mindbase serve
+
+          # Or run as background service
+          brew services start mindbase
+
+          # Check health
+          mindbase health
+          ```
+
+          ### What's Changed
+
+          See commit history for detailed changes.
+
+          ### System Requirements
+
+          - macOS 12.0 or later
+          - Homebrew
+          - ~5GB disk space (including Ollama model)
+
+          ### Documentation
+
+          - [README](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [MCP Server Setup](https://github.com/${{ github.repository }}/blob/main/claudedocs/)
+          - [API Documentation](http://localhost:18002/docs) (after installation)
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            mindbase-${{ steps.version.outputs.VERSION }}.tar.gz
+            Formula/mindbase.rb
+            VERSION
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: kazukinakai/homebrew-mindbase
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          path: main
+
+      - name: Update formula in tap
+        run: |
+          cp main/Formula/mindbase.rb tap/Formula/
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/mindbase.rb
+          git commit -m "Update mindbase to ${GITHUB_REF#refs/tags/}"
+          git push
+
+      - name: Trigger tap repository dispatch
+        run: |
+          cd tap
+          gh workflow run update-formula.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
