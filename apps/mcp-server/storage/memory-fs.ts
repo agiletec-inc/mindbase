@@ -144,7 +144,8 @@ export class FileSystemMemoryBackend implements MemoryStorageBackend {
       }
 
       const data = await response.json() as { embedding: number[] };
-      return data.embedding;
+      // Truncate to 2000 dimensions (pgvector limit)
+      return data.embedding.slice(0, 2000);
     } catch (error) {
       console.error('Failed to generate embedding:', error);
       return undefined;

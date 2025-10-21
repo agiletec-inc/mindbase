@@ -109,7 +109,7 @@ Memory Management (Serena-inspired):
 
 **MCP Server Architecture**:
 ```
-src/mcp-server/index.ts                     # Main entry (stdio transport)
+apps/mcp-server/index.ts                    # Main entry (stdio transport)
 ├── storage/postgres.ts                     # Conversation storage backend
 ├── storage/memory-fs.ts                    # Memory (markdown) storage backend
 ├── storage/interface.ts                    # Storage interface definitions
@@ -125,10 +125,10 @@ Transport: stdio (Claude Desktop/Windsurf/Cursor communicate via stdin/stdout)
 ```
 
 **Key Design Decisions**:
-- **Migration Status**: MCP Server code currently in `src/mcp-server/` → should move to `apps/mcp-server/` (monorepo migration incomplete)
 - Storage backends are abstracted (interface-based, swappable)
 - Environment variables: `DATABASE_URL`, `OLLAMA_URL`, `EMBEDDING_MODEL`, `MEMORY_BASE_DIR`
 - Error handling: All tools return `{error: message}` on failure (no exceptions to client)
+- **Embedding model**: nomic-embed-text (768-dim, ivfflat compatible)
 
 ### Memory System (Serena-Inspired)
 
@@ -212,18 +212,17 @@ memory_search({
 └── db/                                  # Database persistence
 
 ~/github/mindbase/                       # Source code (Git-managed)
-├── app/                                 # ⚠️ FastAPI backend (NOT migrated yet)
-├── src/mcp-server/                      # ⚠️ MCP Server (production version)
 ├── apps/
-│   ├── mcp-server/                      # ✅ MCP Server (new monorepo version)
+│   ├── api/                             # ✅ FastAPI backend (migrated from app/)
+│   ├── mcp-server/                      # ✅ MCP Server (migrated from src/mcp-server/)
 │   └── settings/                        # ✅ Settings UI (React + Vite)
 ├── libs/
-│   ├── collectors/                      # ✅ Python conversation collectors (migrated)
-│   ├── processors/                      # ✅ TypeScript content processors (migrated)
-│   └── generators/                      # ✅ TypeScript article generators (migrated)
+│   ├── collectors/                      # ✅ Python conversation collectors
+│   ├── processors/                      # ✅ TypeScript content processors
+│   └── generators/                      # ✅ TypeScript article generators
 ├── packages/
 │   └── database/                        # PostgreSQL migrations (planned)
-├── supabase/migrations/                 # ⚠️ Current migration location
+├── supabase/migrations/                 # ⚠️ Current migration location (will move to packages/database/)
 ├── tests/                               # Test suite (unit/integration/e2e)
 ├── scripts/                             # Shell scripts for workflows
 └── Formula/                             # Homebrew formula for production install
@@ -231,19 +230,19 @@ memory_search({
 
 **Why this design?** Keeps conversation data out of Claude's context to prevent noise and maintain focus on code.
 
-## Current Codebase Structure (Migration in Progress)
+## Current Codebase Structure
 
-**⚠️ IMPORTANT**: Monorepo migration is **in progress**. Use these actual paths:
+**Monorepo structure (apps, libs, packages):**
 
-### Active Paths (Use These)
+### Active Paths
 ```
-Python API:        app/                          # NOT apps/api/ yet
-MCP Server:        src/mcp-server/               # Production version (stdio)
-                   apps/mcp-server/              # New version (development)
-Collectors:        libs/collectors/              # ✅ Migrated
-Processors:        libs/processors/              # ✅ Migrated
-Generators:        libs/generators/              # ✅ Migrated
-Migrations:        supabase/migrations/          # NOT packages/database/ yet
+Python API:        apps/api/                     # ✅ Migrated from app/
+MCP Server:        apps/mcp-server/              # ✅ Migrated from src/mcp-server/
+Settings UI:       apps/settings/                # ✅ React + Vite
+Collectors:        libs/collectors/              # ✅ Python conversation collectors
+Processors:        libs/processors/              # ✅ TypeScript content processors
+Generators:        libs/generators/              # ✅ TypeScript article generators
+Migrations:        supabase/migrations/          # ⚠️ Will move to packages/database/
 Tests:             tests/                        # unit/integration/e2e
 Homebrew Formula:  Formula/mindbase.rb           # Production install
 ```
@@ -254,13 +253,6 @@ Homebrew Formula:  Formula/mindbase.rb           # Production install
 |-------------|---------------|---------------|----------|--------|
 | **Production** | `mindbase` | 5432 (local) | 18002 | brew (11434) |
 | **Development** | `mindbase_dev` | 15434 (Docker) | 18003 | host brew (11434) |
-
-### When to Use Each MCP Server Location
-
-- **`src/mcp-server/`**: Production MCP server (used by Claude Desktop/Windsurf/Cursor)
-- **`apps/mcp-server/`**: Development version (monorepo structure, not deployed yet)
-
-**For MCP tool changes**: Edit `src/mcp-server/` until migration is complete.
 
 ## Development Modes
 
@@ -470,17 +462,17 @@ curl -X POST http://localhost:18003/conversations/search \
 
 ### 1. Apps (Deployable Applications)
 
-**app/** - FastAPI Backend (Python) ⚠️ **Current Location**
+**apps/api/** - FastAPI Backend (Python) ✅ **Migrated**
 - `main.py` - FastAPI app with CORS, health check, route registration
 - `config.py` - Pydantic settings (database, Ollama, API config)
 - `database.py` - SQLAlchemy async engine with pgvector support
-- `ollama_client.py` - Ollama embedding client (qwen3-embedding:8b)
+- `ollama_client.py` - Ollama embedding client (nomic-embed-text, 768-dim)
 - `api/routes/` - REST API endpoints (conversations, health, search)
 - `crud/` - Database CRUD operations
 - `models/` - SQLAlchemy models with pgvector
 - `schemas/` - Pydantic schemas for validation
 
-**src/mcp-server/** - MCP Server (TypeScript) ⚠️ **Production Version**
+**apps/mcp-server/** - MCP Server (TypeScript) ✅ **Migrated**
 - `index.ts` - MCP Server main entry point (stdio transport)
 - `storage/postgres.ts` - PostgreSQL storage backend (conversations)
 - `storage/memory-fs.ts` - Filesystem storage backend (memories)
@@ -488,10 +480,6 @@ curl -X POST http://localhost:18003/conversations/search \
 - `storage/memory-interface.ts` - Memory storage interface
 - `tools/conversation.ts` - Conversation management tools
 - `tools/memory.ts` - Memory management tools (Serena-inspired)
-
-**apps/mcp-server/** - MCP Server (TypeScript) ✅ **Monorepo Version (Dev)**
-- Same structure as `src/mcp-server/` but organized in monorepo pattern
-- Use this for new development once migration is complete
 
 **apps/settings/** - Settings UI (React + Vite)
 - React 19 + Vite + Tailwind CSS
@@ -669,14 +657,14 @@ See `INTEGRATION_PLAN.md` for complete integration details.
 - **Shared code**: Place in `libs/` (not in individual apps)
 - **Migration paths**: See `MONOREPO.md` for old→new path mappings
 
-### Python Code Style (app/, libs/collectors/)
+### Python Code Style (apps/api/, libs/collectors/)
 - Use async/await for all I/O operations (FastAPI, database, Ollama)
 - Pydantic for settings and data validation
 - Dataclasses for structured conversation data
 - Type hints required for all functions
 - Testing: pytest with async support (`pytest-asyncio`)
 
-### TypeScript Code Style (src/mcp-server/, apps/mcp-server/, apps/settings/, libs/processors/, libs/generators/)
+### TypeScript Code Style (apps/mcp-server/, apps/settings/, libs/processors/, libs/generators/)
 - ESM modules (`"type": "module"` in package.json)
 - Use `tsx` for running TypeScript directly
 - Async/await for file I/O and API calls
@@ -733,8 +721,8 @@ npm install -g pnpm
 ## Common Development Tasks
 
 ### Adding New MCP Tools
-1. Define tool schema in `src/mcp-server/index.ts` TOOLS array
-2. Implement handler in `src/mcp-server/tools/*.ts`
+1. Define tool schema in `apps/mcp-server/index.ts` TOOLS array
+2. Implement handler in `apps/mcp-server/tools/*.ts`
 3. Add switch case in `setupHandlers()` method
 4. Test with Claude Desktop/Windsurf/Cursor
 5. Document in CLAUDE.md and `claudedocs/`
@@ -755,25 +743,21 @@ npm install -g pnpm
 
 ### Monorepo Migration Status
 
-**Current migration progress:**
-
-**✅ Completed:**
+**✅ Migration Complete:**
 - [x] Move Python libs: `collectors/` → `libs/collectors/`
 - [x] Move TypeScript libs: `src/processors/` → `libs/processors/`, `src/generators/` → `libs/generators/`
 - [x] Create monorepo structure with pnpm workspace
 - [x] Setup Settings UI in `apps/settings/`
+- [x] Move Python app: `app/` → `apps/api/` ✅
+- [x] Move MCP Server: `src/mcp-server/` → `apps/mcp-server/` ✅
+- [x] Update docker-compose.yml to use `apps/api/`
+- [x] Update test scripts to use `apps/mcp-server/`
 
-**⚠️ In Progress:**
-- [ ] Move MCP Server: `src/mcp-server/` → `apps/mcp-server/` (both exist, production uses `src/`)
-
-**🔜 Pending:**
-- [ ] Move Python app: `app/` → `apps/api/`
+**🔜 Remaining (Minor):**
 - [ ] Move migrations: `supabase/migrations/` → `packages/database/migrations/`
-- [ ] Update all imports and package.json references
-- [ ] Remove old directory structure after verification
-- [ ] Update Homebrew formula to use new paths
+- [ ] Update Homebrew formula to use new paths (when releasing)
 
-**For now, use existing paths:**
-- Python API: `app/` (NOT `apps/api/`)
-- MCP Server: `src/mcp-server/` for production changes
-- Migrations: `supabase/migrations/` (NOT `packages/database/`)
+**Use these paths:**
+- Python API: `apps/api/` ✅
+- MCP Server: `apps/mcp-server/` ✅
+- Migrations: `supabase/migrations/` (will move to `packages/database/` eventually)
