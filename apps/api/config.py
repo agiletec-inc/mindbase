@@ -5,18 +5,23 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    """Application settings"""
+    """Application settings
 
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://mindbase:mindbase_dev@postgres:5432/mindbase"
+    ⚠️ WARNING: NEVER hardcode ports or URLs here.
+    All configuration MUST come from environment variables.
+    See .env.example for required variables.
+    """
 
-    # Ollama
-    OLLAMA_URL: str = "http://ollama:11434"
-    EMBEDDING_MODEL: str = "qwen3-embedding:8b"
-    EMBEDDING_DIMENSIONS: int = 1024
+    # Database - REQUIRED from environment
+    DATABASE_URL: str
+
+    # Ollama - REQUIRED from environment
+    OLLAMA_URL: str
+    EMBEDDING_MODEL: str
+    EMBEDDING_DIMENSIONS: int
 
     # API
-    DEBUG: bool = True
+    DEBUG: bool = False
     API_TITLE: str = "MindBase API"
     API_VERSION: str = "1.0.0"
     API_DESCRIPTION: str = "AI Conversation Knowledge Management System"

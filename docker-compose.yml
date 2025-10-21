@@ -6,14 +6,14 @@ services:
     image: pgvector/pgvector:pg17
     container_name: mindbase-postgres-dev
     environment:
-      POSTGRES_USER: mindbase
-      POSTGRES_PASSWORD: mindbase_dev
-      POSTGRES_DB: mindbase_dev  # 開発DB
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
       - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
     ports:
-      - "${POSTGRES_PORT:-15434}:5432"  # 開発用ポート (本番15433と分離)
+      - "${POSTGRES_PORT}:${POSTGRES_INTERNAL_PORT}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mindbase"]
       interval: 10s
@@ -28,13 +28,13 @@ services:
       dockerfile: Dockerfile
     container_name: mindbase-api-dev
     ports:
-      - "${API_PORT:-18003}:8000"  # 開発用ポート (本番18002と分離)
+      - "${API_PORT}:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://mindbase:mindbase_dev@postgres:5432/mindbase_dev
-      - OLLAMA_URL=http://host.docker.internal:11434  # ホストのbrew Ollama優先
-      - EMBEDDING_MODEL=qwen3-embedding:8b
-      - EMBEDDING_DIMENSIONS=1024
-      - DEBUG=${DEBUG:-true}
+      - DATABASE_URL=${DATABASE_URL}
+      - OLLAMA_URL=${OLLAMA_URL}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS}
+      - DEBUG=${DEBUG}
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,9 +57,9 @@ services:
     image: ollama/ollama:latest
     container_name: mindbase-ollama-dev
     profiles:
-      - ollama  # 明示的に --profile ollama で起動 (非推奨: brew版推奨)
+      - ollama
     ports:
-      - "11435:11434"  # 開発用ポート (本番brew Ollamaの11434と分離)
+      - "${OLLAMA_PORT}:11434"
     volumes:
       - ollama_data_dev:/root/.ollama
     restart: unless-stopped

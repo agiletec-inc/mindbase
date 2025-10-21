@@ -14,14 +14,14 @@ import { Pool } from 'pg';
 export class FileSystemMemoryBackend implements MemoryStorageBackend {
   private baseDir: string;
   private pool?: Pool;
-  private ollamaUrl: string;
-  private embeddingModel: string;
+  private ollamaUrl?: string;
+  private embeddingModel?: string;
 
   constructor(
     baseDir?: string,
     connectionString?: string,
-    ollamaUrl = 'http://localhost:11434',
-    embeddingModel = 'qwen3-embedding:8b'
+    ollamaUrl?: string,
+    embeddingModel?: string
   ) {
     // Default: ~/Library/Application Support/mindbase/memories
     this.baseDir =

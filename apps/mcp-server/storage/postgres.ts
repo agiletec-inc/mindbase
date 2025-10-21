@@ -20,7 +20,7 @@ export class PostgresStorageBackend implements StorageBackend {
   private ollamaUrl: string;
   private embeddingModel: string;
 
-  constructor(connectionString: string, ollamaUrl = 'http://localhost:11434', embeddingModel = 'qwen3-embedding:8b') {
+  constructor(connectionString: string, ollamaUrl: string, embeddingModel: string) {
     this.pool = new Pool({ connectionString });
     this.ollamaUrl = ollamaUrl;
     this.embeddingModel = embeddingModel;

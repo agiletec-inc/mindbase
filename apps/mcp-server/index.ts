@@ -20,10 +20,21 @@ import { ConversationTools } from './tools/conversation.js';
 import { MemoryTools } from './tools/memory.js';
 
 // Environment variables
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://mindbase:mindbase_dev@localhost:15433/mindbase';
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'qwen3-embedding:8b';
-const MEMORY_BASE_DIR = process.env.MEMORY_BASE_DIR; // Optional: defaults to ~/Library/Application Support/mindbase/memories
+// ⚠️ WARNING: NEVER hardcode ports, URLs, or connection strings.
+// All configuration MUST come from environment variables.
+const DATABASE_URL = process.env.DATABASE_URL;
+const OLLAMA_URL = process.env.OLLAMA_URL;
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL;
+const MEMORY_BASE_DIR = process.env.MEMORY_BASE_DIR;
+
+if (!DATABASE_URL || !OLLAMA_URL || !EMBEDDING_MODEL) {
+  console.error('ERROR: Required environment variables not set:');
+  if (!DATABASE_URL) console.error('  - DATABASE_URL');
+  if (!OLLAMA_URL) console.error('  - OLLAMA_URL');
+  if (!EMBEDDING_MODEL) console.error('  - EMBEDDING_MODEL');
+  console.error('\nSee .env.example for required configuration.');
+  process.exit(1);
+}
 
 // Tool definitions
 const TOOLS: Tool[] = [

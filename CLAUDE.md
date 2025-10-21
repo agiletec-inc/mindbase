@@ -2,6 +2,42 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+## ⚠️ CRITICAL RULES - READ THIS FIRST
+
+### **NEVER HARDCODE PORTS, URLs, OR CONNECTION STRINGS**
+
+**Violations will break production, development, and testing environments.**
+
+❌ **WRONG:**
+```python
+DATABASE_URL = "postgresql://localhost:5432/db"  # NEVER DO THIS
+OLLAMA_URL = "http://localhost:11434"            # NEVER DO THIS
+API_PORT = 18003                                 # NEVER DO THIS
+```
+
+✅ **CORRECT:**
+```python
+# All configuration from environment variables
+DATABASE_URL = os.getenv("DATABASE_URL")  # Required
+OLLAMA_URL = os.getenv("OLLAMA_URL")      # Required
+API_PORT = int(os.getenv("API_PORT"))     # Required
+```
+
+**WHY THIS MATTERS:**
+1. **Port conflicts**: Hardcoded ports cause failures in CI/CD, local dev, and multi-instance setups
+2. **Security**: Connection strings contain credentials
+3. **Flexibility**: Different environments need different configurations
+4. **Maintainability**: Configuration changes shouldn't require code changes
+
+**ENFORCEMENT:**
+- See `.env.example` for ALL required environment variables
+- Apps MUST fail fast with clear error messages if env vars are missing
+- Never provide default values for ports/URLs in code
+
+---
+
 ## Project Overview
 
 **MindBase** is an AI conversation knowledge management system that collects, analyzes, and transforms conversations from multiple AI platforms (Claude Code, Claude Desktop, ChatGPT, Cursor, Windsurf) into structured content for blog generation and publishing.
@@ -249,19 +285,23 @@ Homebrew Formula:  Formula/mindbase.rb           # Production install
 
 ### Environment-Specific Configuration
 
-| Environment | Database Name | Database Port | API Port | Ollama |
-|-------------|---------------|---------------|----------|--------|
-| **Production** | `mindbase` | 5432 (local) | 18002 | brew (11434) |
-| **Development** | `mindbase_dev` | 15434 (Docker) | 18003 | host brew (11434) |
+| Environment | Database Name | Database Port | API Port | Ollama Port |
+|-------------|---------------|---------------|----------|-------------|
+| **Production** | `${POSTGRES_DB}` | `${POSTGRES_PORT}` | `${API_PORT}` | `${OLLAMA_PORT}` |
+| **Development** | `${POSTGRES_DB}` | `${POSTGRES_PORT}` | `${API_PORT}` | `${OLLAMA_PORT}` |
+
+**All values come from environment variables. See `.env.example` for configuration.**
 
 ## Development Modes
 
 **MindBase supports two execution modes with complete separation:**
 
-| Mode | Use Case | Port | Database | Ollama | Data |
-|------|----------|------|----------|--------|------|
-| **Production** | Daily use, MCP Server | 18002 | Local PostgreSQL (5432) | brew (GPU) | Application Support |
-| **Development** | Feature development | 18003 | Docker (15434) | Host brew | Docker volumes |
+| Mode | Use Case | Configuration | Database | Ollama | Data |
+|------|----------|---------------|----------|--------|------|
+| **Production** | Daily use, MCP Server | `.env` (production values) | Local PostgreSQL | brew (GPU) | Application Support |
+| **Development** | Feature development | `.env` (development values) | Docker PostgreSQL | Host brew | Docker volumes |
+
+**Configure via environment variables - see `.env.example`**
 
 ### Production Mode (Homebrew Installation)
 
@@ -286,7 +326,7 @@ brew services start mindbase  # Background service
 
 # Health check
 mindbase health
-curl http://localhost:18002/health
+curl http://localhost:${API_PORT}/health
 
 # MCP Server configuration
 # Add to ~/.config/claude/claude_desktop_config.json:
@@ -300,11 +340,11 @@ curl http://localhost:18002/health
 }
 ```
 
-**Production endpoints:**
-- API: http://localhost:18002
-- Docs: http://localhost:18002/docs
-- Database: postgresql://$(whoami)@localhost:5432/mindbase
-- Ollama: http://localhost:11434 (brew install ollama, GPU-enabled)
+**Production endpoints** (configured via environment variables):
+- API: `http://localhost:${API_PORT}`
+- Docs: `http://localhost:${API_PORT}/docs`
+- Database: `${DATABASE_URL}`
+- Ollama: `${OLLAMA_URL}` (brew install ollama, GPU-enabled)
 
 ### Development Mode (Docker)
 
@@ -334,45 +374,28 @@ make clean                   # Remove local artifacts (__pycache__, node_modules
 make clean-all               # Delete everything including volumes (⚠️ data loss)
 ```
 
-**Development endpoints:**
-- API: http://localhost:18003 (dev port, production: 18002)
-- Docs: http://localhost:18003/docs
-- Database: postgresql://mindbase:mindbase_dev@localhost:15434/mindbase_dev
-- Ollama: http://host.docker.internal:11434 (uses host brew Ollama)
-
-### Port Separation (No Conflicts)
-
-```yaml
-Production (brew install):
-  API: 18002
-  PostgreSQL: 5432 (default)
-  Ollama: 11434 (brew)
-
-Development (Docker):
-  API: 18003  # +1 from production
-  PostgreSQL: 15434  # +1 from 15433
-  Ollama: 11434 (host.docker.internal)  # Uses production brew Ollama
-```
-
-**Why this works:** Development and production can run simultaneously without conflicts. Test E2E by installing brew version while developing in Docker.
+**Development endpoints** (configured via `.env`):
+- API: `http://localhost:${API_PORT}`
+- Docs: `http://localhost:${API_PORT}/docs`
+- Database: `${DATABASE_URL}`
+- Ollama: `${OLLAMA_URL}` (uses host brew Ollama)
 
 ### Testing Workflow
 
 ```bash
-# 1. Develop in Docker (port 18003)
+# 1. Develop in Docker
 make up
 make api-shell
 # ... make changes ...
 pytest tests/
 
-# 2. Test locally installed version (port 18002)
+# 2. Test locally installed version
 brew install --build-from-source Formula/mindbase.rb
 brew services start mindbase
-curl http://localhost:18002/health  # Production
-curl http://localhost:18003/health  # Development
+curl http://localhost:${API_PORT}/health
 
-# 3. Both running simultaneously
-# Development changes don't affect production instance
+# 3. Run both environments with different .env configurations
+# Configure distinct ports in each .env to avoid conflicts
 ```
 
 ### Monorepo Workflows (pnpm)
@@ -406,22 +429,26 @@ pnpm --filter @mindbase/processors extract
 
 ### Service Endpoints
 
-Production (Homebrew):
-```
-API:        http://localhost:18002        (FastAPI backend)
-API Docs:   http://localhost:18002/docs   (Swagger UI)
-Ollama:     http://localhost:11434        (Embedding service, brew)
-PostgreSQL: localhost:5432                (Local PostgreSQL, database: mindbase)
-Health:     http://localhost:18002/health (API health check)
+**All endpoints configured via environment variables (see `.env.example`):**
+
+```bash
+# API Endpoints
+API:        http://${API_HOST}:${API_PORT}
+API Docs:   http://${API_HOST}:${API_PORT}/docs
+Health:     http://${API_HOST}:${API_PORT}/health
+
+# Services
+Ollama:     ${OLLAMA_URL}
+PostgreSQL: ${DATABASE_URL}
 ```
 
-Development (Docker):
-```
-API:        http://localhost:18003        (FastAPI backend)
-API Docs:   http://localhost:18003/docs   (Swagger UI)
-Ollama:     http://localhost:11434        (Embedding service, host brew)
-PostgreSQL: localhost:15434               (Docker PostgreSQL, database: mindbase_dev)
-Health:     http://localhost:18003/health (API health check)
+**Example usage:**
+```bash
+# Check API health
+curl http://localhost:${API_PORT}/health
+
+# View API documentation
+open http://localhost:${API_PORT}/docs
 ```
 
 ### API Endpoints
@@ -430,8 +457,7 @@ Health:     http://localhost:18003/health (API health check)
 ```bash
 POST /conversations/store
 # Store conversation with automatic embedding generation
-# Development:
-curl -X POST http://localhost:18003/conversations/store \
+curl -X POST http://localhost:${API_PORT}/conversations/store \
   -H "Content-Type: application/json" \
   -d '{
     "source": "claude-code",
@@ -445,8 +471,7 @@ curl -X POST http://localhost:18003/conversations/store \
 ```bash
 POST /conversations/search
 # Search conversations by semantic similarity
-# Development:
-curl -X POST http://localhost:18003/conversations/search \
+curl -X POST http://localhost:${API_PORT}/conversations/search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "database migration PostgreSQL",
@@ -455,8 +480,6 @@ curl -X POST http://localhost:18003/conversations/search \
     "source": "claude-code"
   }'
 ```
-
-**Note**: For production (Homebrew), use port `18002` instead of `18003`.
 
 ## Architecture Layers
 
@@ -488,27 +511,36 @@ curl -X POST http://localhost:18003/conversations/search \
 
 **Environment Variables**:
 
-Development (Docker):
+**⚠️ NEVER hardcode values in code. ALL configuration via environment variables.**
+
+See `.env.example` for complete list of required variables:
+
 ```bash
-DATABASE_URL=postgresql+asyncpg://mindbase:mindbase_dev@postgres:5432/mindbase_dev
-OLLAMA_URL=http://host.docker.internal:11434  # Uses host brew Ollama
-EMBEDDING_MODEL=qwen3-embedding:8b
-EMBEDDING_DIMENSIONS=1024
-DEBUG=true
-API_PORT=18003  # Development port
-MEMORY_BASE_DIR=~/Library/Application Support/mindbase/memories  # Optional
+# PostgreSQL Configuration
+POSTGRES_HOST=localhost
+POSTGRES_PORT=...        # Configure per environment
+POSTGRES_USER=mindbase
+POSTGRES_PASSWORD=...    # Set securely
+POSTGRES_DB=...          # mindbase or mindbase_dev
+
+# Ollama Configuration
+OLLAMA_HOST=localhost
+OLLAMA_PORT=...          # Configure per environment
+EMBEDDING_MODEL=nomic-embed-text
+EMBEDDING_DIMENSIONS=768
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=...             # Configure per environment
+DEBUG=false              # true for development
+
+# Constructed URLs (or override directly)
+DATABASE_URL=...
+OLLAMA_URL=...
+MEMORY_BASE_DIR=...
 ```
 
-Production (Homebrew):
-```bash
-DATABASE_URL=postgresql+asyncpg://$(whoami)@localhost:5432/mindbase
-OLLAMA_URL=http://localhost:11434
-EMBEDDING_MODEL=qwen3-embedding:8b
-EMBEDDING_DIMENSIONS=1024
-DEBUG=false
-API_PORT=18002  # Production port
-MEMORY_BASE_DIR=~/Library/Application Support/mindbase/memories  # Optional
-```
+**Copy `.env.example` to `.env` and configure for your environment.**
 
 ### 2. Libs (Shared Libraries)
 
