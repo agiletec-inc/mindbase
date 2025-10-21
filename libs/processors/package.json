@@ -1,0 +1,13 @@
+{
+  "name": "@mindbase/processors",
+  "version": "1.0.0",
+  "description": "Content processors for extracting topics and modules",
+  "type": "module",
+  "main": "extract-modules.ts",
+  "scripts": {
+    "extract": "tsx extract-modules.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.20.6"
+  }
+}

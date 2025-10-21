@@ -1,0 +1,13 @@
+{
+  "name": "@mindbase/generators",
+  "version": "1.0.0",
+  "description": "Content generators for articles and publishing",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx generate-article.ts",
+    "publish": "tsx publish-qiita.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.20.6"
+  }
+}

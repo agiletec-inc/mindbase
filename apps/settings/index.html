@@ -1,0 +1,42 @@
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MindBase MCP - 記憶と文脈を統合管理する自律アーカイブ基盤</title>
+    <meta name="description" content="MindBase MCPは記憶と文脈を統合管理する自律アーカイブ基盤です。短期・長期メモリの統合、RAG統合、Self-Improving Context機能を備えたAI補助メモリOSです。" />
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome -->
+    <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script>
+    
+    <!-- Remix Icon -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.0.0/fonts/remixicon.css" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Readdy Agent Widget -->
+    <script 
+      src="https://readdy.ai/api/public/assistant/widget?projectId=2c4cf5cd-e21e-40dc-bdba-0e9b01f02176"
+      mode="hybrid"
+      voice-show-transcript="true"
+      theme="light"
+      size="compact"
+      accent-color="#3B82F6"
+      button-base-color="#1F2937"
+      button-accent-color="#FFFFFF"
+      main-label="MindBaseと対話"
+      start-button-text="開始"
+      end-button-text="終了"
+      defer
+    ></script>
+  </body>
+</html>

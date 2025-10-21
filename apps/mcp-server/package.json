@@ -1,0 +1,29 @@
+{
+  "name": "@mindbase/mcp-server",
+  "version": "1.0.0",
+  "description": "MindBase MCP Server - Model Context Protocol integration",
+  "type": "module",
+  "main": "index.ts",
+  "bin": {
+    "mindbase-mcp": "./index.ts"
+  },
+  "scripts": {
+    "dev": "tsx index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "pg": "^8.16.3",
+    "pgvector": "^0.2.1",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.8.0",
+    "@types/pg": "^8.15.5",
+    "@types/uuid": "^11.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@mindbase/shared",
+  "version": "1.0.0",
+  "description": "Shared types and utilities",
+  "type": "module",
+  "main": "index.ts"
+}

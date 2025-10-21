@@ -1,6 +1,3 @@
-# Project-specific configuration (keep out of Git)
-CLAUDE.md
-
 # Environment variables
 .env
 .env.*
