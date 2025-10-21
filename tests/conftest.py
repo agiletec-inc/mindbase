@@ -21,11 +21,22 @@ from app.database import Base
 
 @pytest.fixture(scope="session")
 def test_settings() -> Settings:
-    """Test-specific settings."""
+    """Test-specific settings.
+
+    ⚠️ Uses environment variables for all configuration.
+    Set TEST_DATABASE_URL, TEST_OLLAMA_URL in environment or CI.
+    """
     return Settings(
-        DATABASE_URL="postgresql+asyncpg://mindbase:mindbase_dev@localhost:15433/mindbase_test",
-        OLLAMA_URL="http://localhost:11434",
-        EMBEDDING_MODEL="qwen3-embedding:8b",
+        DATABASE_URL=os.getenv(
+            "TEST_DATABASE_URL",
+            os.getenv("DATABASE_URL", "")
+        ),
+        OLLAMA_URL=os.getenv(
+            "TEST_OLLAMA_URL",
+            os.getenv("OLLAMA_URL", "")
+        ),
+        EMBEDDING_MODEL=os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
+        EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "768")),
         DEBUG=True,
     )
 
@@ -109,9 +120,9 @@ def temp_archive_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mock_ollama_response() -> dict:
-    """Mock Ollama embedding response."""
+    """Mock Ollama embedding response (nomic-embed-text: 768-dim)."""
     return {
-        "embedding": [0.1] * 1024,  # 1024-dimensional vector
+        "embedding": [0.1] * 768,  # 768-dimensional vector (nomic-embed-text)
     }
 
 
