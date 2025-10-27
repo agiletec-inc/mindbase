@@ -35,12 +35,13 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL}
       - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS}
       - DEBUG=${DEBUG}
+      - PYTHONPATH=/app/app:/workspace/mindbase
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./apps/api:/app/app:rw
-      - /Users/kazuki/github:/workspace/github:ro  # Read-only access for collectors
+      - .:/workspace/mindbase:ro  # Read-only access to entire repository for tooling
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
     healthcheck:

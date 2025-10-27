@@ -13,18 +13,15 @@ UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_S),Darwin)
     ifeq ($(UNAME_M),arm64)
         PLATFORM := apple_silicon
-        OLLAMA_METHOD := native
-        OLLAMA_URL := http://localhost:11434
     else
         PLATFORM := intel_mac
-        OLLAMA_METHOD := docker
-        OLLAMA_URL := http://localhost:11434
     endif
 else
     PLATFORM := other
-    OLLAMA_METHOD := docker
-    OLLAMA_URL := http://ollama:11434
 endif
+
+OLLAMA_METHOD := docker
+OLLAMA_URL := http://ollama:11434
 
 ## help: 全コマンド一覧表示
 help:
@@ -69,7 +66,7 @@ help:
 ifeq ($(OLLAMA_METHOD),native)
 	@echo "Note: Apple Silicon detected → Ollama via brew (Metal GPU 3-5x faster)"
 else
-	@echo "Note: Non-Apple Silicon → Ollama via Docker (CPU-only)"
+	@echo "Note: Using Dockerized Ollama for all platforms"
 endif
 
 ## platform: 検出されたプラットフォーム情報表示
@@ -83,29 +80,13 @@ platform:
 ifeq ($(OLLAMA_METHOD),native)
 	@echo "  GPU Support:   Metal (Apple Silicon)"
 else
-	@echo "  GPU Support:   None (CPU-only)"
+	@echo "  GPU Support:   Depends on Ollama container configuration"
 endif
 
 ## up: 全サービス起動
 up:
 	@echo "🚀 Starting MindBase services ($(PLATFORM))..."
-ifeq ($(OLLAMA_METHOD),native)
-	@# Apple Silicon → Native Ollama (brew)
-	@if ! command -v ollama &> /dev/null; then \
-		echo "⚠️  Ollama not found. Run: make install-ollama"; \
-		exit 1; \
-	fi
-	@if ! pgrep -x "ollama" > /dev/null; then \
-		echo "🔄 Starting Ollama (native + Metal GPU)..."; \
-		ollama serve > /dev/null 2>&1 & \
-		sleep 2; \
-	fi
-	docker compose up -d --remove-orphans
-else
-	@# Intel Mac / Linux / Windows → Docker Ollama
-	@echo "🔄 Starting Ollama (Docker + CPU-only)..."
 	docker compose --profile ollama up -d --remove-orphans
-endif
 	@echo "✅ Services started"
 	@echo ""
 	@echo "  API:        http://localhost:18002"
@@ -210,25 +191,42 @@ api-shell:
 db-shell:
 	docker compose exec postgres psql -U mindbase -d mindbase
 
+define RUN_IN_CONTAINER
+	docker compose exec api bash -lc 'set -euo pipefail; \
+		SRC=/workspace/mindbase; \
+		WORK=/tmp/mindbase; \
+		rm -rf "$$WORK"; \
+		mkdir -p "$$WORK"; \
+		cp "$$SRC/pytest.ini" "$$WORK/"; \
+		cp -r "$$SRC/tests" "$$WORK/"; \
+		cp -r "$$SRC/collectors" "$$WORK/"; \
+		cp -r "$$SRC/scripts" "$$WORK/"; \
+		if [ -d "$$SRC/docs" ]; then cp -r "$$SRC/docs" "$$WORK/"; fi; \
+		cp -r "$$SRC/apps/api" "$$WORK/app"; \
+		export PYTHONPATH="$$WORK"; \
+		cd "$$WORK"; \
+		$(1)'
+endef
+
 ## test: 全テスト実行
 test:
-	docker compose exec api pytest tests/ -v
+	$(call RUN_IN_CONTAINER,pytest tests/ -v)
 
 ## test-unit: ユニットテストのみ
 test-unit:
-	docker compose exec api pytest tests/unit -v -m unit
+	$(call RUN_IN_CONTAINER,pytest tests/unit -v -m unit)
 
 ## test-integration: 統合テストのみ
 test-integration:
-	docker compose exec api pytest tests/integration -v -m integration
+	$(call RUN_IN_CONTAINER,pytest tests/integration -v -m integration)
 
 ## test-e2e: E2Eテストのみ
 test-e2e:
-	docker compose exec api pytest tests/e2e -v -m e2e
+	$(call RUN_IN_CONTAINER,pytest tests/e2e -v -m e2e)
 
 ## test-cov: カバレッジレポート付きテスト
 test-cov:
-	docker compose exec api pytest tests/ -v --cov=app --cov=collectors --cov-report=html --cov-report=term-missing
+	$(call RUN_IN_CONTAINER,pytest tests/ -v --cov=app --cov=collectors --cov-report=html --cov-report=term-missing)
 
 ## clean: ローカル成果物削除
 clean:

@@ -1,7 +1,7 @@
 """Embedding model management API endpoints"""
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import platform
 import psutil
 import subprocess
@@ -75,6 +75,18 @@ class SystemSpecsResponse(BaseModel):
     ollama_install_method: Literal["brew", "docker"]
     recommended_models: list[str]
     max_model_size: str
+
+
+class EmbeddingGenerateRequest(BaseModel):
+    """Request body for embedding generation"""
+    text: str = Field(..., min_length=1, description="Text to embed")
+
+
+class EmbeddingGenerateResponse(BaseModel):
+    """Response model for embedding generation"""
+    embedding: list[float]
+    dimensions: int
+    model: str
 
 
 # === Model Database ===
@@ -421,3 +433,17 @@ async def get_system_specs():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get system specs: {str(e)}")
+
+
+@router.post("/generate", response_model=EmbeddingGenerateResponse)
+async def generate_embedding(request: EmbeddingGenerateRequest):
+    """Generate an embedding vector for arbitrary text."""
+    try:
+        embedding = await ollama_client.embed(request.text)
+        return EmbeddingGenerateResponse(
+            embedding=embedding,
+            dimensions=len(embedding),
+            model=ollama_client.model,
+        )
+    except Exception as e:  # pragma: no cover - surfaced via API response
+        raise HTTPException(status_code=500, detail=f"Failed to generate embedding: {str(e)}")

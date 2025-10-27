@@ -3,6 +3,8 @@ Integration tests for API endpoints.
 
 Tests conversation storage and semantic search endpoints.
 """
+import copy
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,11 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class TestConversationEndpoints:
     """Test /conversations/* endpoints."""
 
-    async def test_store_conversation(self, client: AsyncClient, sample_conversation_data: dict):
+    async def test_store_conversation(self, client: AsyncClient, api_conversation_payload: dict):
         """Test POST /conversations/store creates conversation."""
         response = await client.post(
             "/conversations/store",
-            json=sample_conversation_data
+            json=api_conversation_payload
         )
 
         assert response.status_code == 200
@@ -36,33 +38,33 @@ class TestConversationEndpoints:
         """Test conversation storage generates embedding vector."""
         response = await client.post(
             "/conversations/store",
-            json=sample_conversation_data
+            json=api_conversation_payload,
         )
 
         assert response.status_code == 200
         conversation_id = response.json()["id"]
 
         # Verify embedding was generated
+        from sqlalchemy import select
         from app.models.conversation import Conversation
-        result = await db_session.execute(
-            "SELECT embedding FROM conversations WHERE id = :id",
-            {"id": conversation_id}
-        )
-        row = result.fetchone()
 
-        assert row is not None
-        assert row["embedding"] is not None
-        # nomic-embed-text produces 768-dimensional vectors
-        assert len(row["embedding"]) == 768
+        result = await db_session.execute(
+            select(Conversation.embedding).where(Conversation.id == conversation_id)
+        )
+        embedding = result.scalar()
+
+        assert embedding is not None
+        # qwen3-embedding:8b produces 1024-dimensional vectors
+        assert len(embedding) == 1024
 
     async def test_search_conversations(
         self,
         client: AsyncClient,
-        sample_conversation_data: dict
+        api_conversation_payload: dict,
     ):
         """Test POST /conversations/search finds similar conversations."""
         # Store a conversation first
-        await client.post("/conversations/store", json=sample_conversation_data)
+        await client.post("/conversations/store", json=api_conversation_payload)
 
         # Search for it
         response = await client.post(
@@ -77,24 +79,30 @@ class TestConversationEndpoints:
         assert response.status_code == 200
         data = response.json()
 
-        assert "results" in data
-        assert len(data["results"]) > 0
-        assert data["results"][0]["similarity"] > 0.5
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert data[0]["similarity"] > 0.5
 
     async def test_search_filters_by_source(
         self,
         client: AsyncClient,
-        sample_conversation_data: dict
+        api_conversation_payload: dict,
     ):
         """Test search can filter by source."""
         # Store conversations from different sources
+        original = copy.deepcopy(api_conversation_payload)
         await client.post(
             "/conversations/store",
-            json={**sample_conversation_data, "source": "claude-code"}
+            json=original,
         )
+
+        other = copy.deepcopy(api_conversation_payload)
+        other["source"] = "chatgpt"
+        other["source_conversation_id"] = "different"
+
         await client.post(
             "/conversations/store",
-            json={**sample_conversation_data, "source": "chatgpt", "thread_id": "different"}
+            json=other,
         )
 
         # Search with source filter
@@ -108,7 +116,7 @@ class TestConversationEndpoints:
         )
 
         assert response.status_code == 200
-        results = response.json()["results"]
+        results = response.json()
 
         # All results should be from claude-code
         for result in results:
@@ -141,7 +149,7 @@ class TestEmbeddingEndpoint:
     async def test_generate_embedding(self, client: AsyncClient):
         """Test POST /embeddings/generate creates vector."""
         response = await client.post(
-            "/embeddings/generate",
+            "/api/embeddings/generate",
             json={"text": "This is a test sentence"}
         )
 
@@ -149,13 +157,13 @@ class TestEmbeddingEndpoint:
         data = response.json()
 
         assert "embedding" in data
-        assert len(data["embedding"]) == 768  # nomic-embed-text
+        assert len(data["embedding"]) == 1024  # qwen3-embedding:8b
         assert all(isinstance(x, float) for x in data["embedding"])
 
     async def test_generate_embedding_validates_text(self, client: AsyncClient):
         """Test embedding generation requires text."""
         response = await client.post(
-            "/embeddings/generate",
+            "/api/embeddings/generate",
             json={}
         )
 

@@ -4,7 +4,6 @@ Base Collector Class
 Foundation for all AI conversation collectors with precise data structures
 """
 
-import os
 import json
 import hashlib
 import logging
@@ -34,7 +33,7 @@ class Message:
         # Generate message_id if not provided
         if not self.message_id:
             content_hash = hashlib.sha256(
-                f"{self.role}:{self.content}:{self.timestamp}".encode()
+                f"{self.role}:{self.content}".encode()
             ).hexdigest()[:16]
             self.message_id = f"msg_{content_hash}"
     

@@ -3,6 +3,8 @@ Pytest configuration and shared fixtures for MindBase tests.
 """
 import asyncio
 import os
+from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncGenerator, Generator
 
@@ -11,6 +13,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from collectors.base_collector import Message
 from app.config import Settings
 from app.database import Base
 
@@ -35,8 +38,8 @@ def test_settings() -> Settings:
             "TEST_OLLAMA_URL",
             os.getenv("OLLAMA_URL", "")
         ),
-        EMBEDDING_MODEL=os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
-        EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "768")),
+        EMBEDDING_MODEL=os.getenv("EMBEDDING_MODEL", "qwen3-embedding:8b"),
+        EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "1024")),
         DEBUG=True,
     )
 
@@ -45,15 +48,7 @@ def test_settings() -> Settings:
 # Database Fixtures
 # ========================================
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def test_engine(test_settings: Settings) -> AsyncGenerator[AsyncEngine, None]:
     """Create test database engine."""
     engine = create_async_engine(
@@ -120,33 +115,75 @@ def temp_archive_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mock_ollama_response() -> dict:
-    """Mock Ollama embedding response (nomic-embed-text: 768-dim)."""
+    """Mock Ollama embedding response (qwen3-embedding:8b: 1024-dim)."""
     return {
-        "embedding": [0.1] * 768,  # 768-dimensional vector (nomic-embed-text)
+        "embedding": [0.1] * 1024,  # 1024-dimensional vector (qwen3-embedding:8b)
     }
 
 
 @pytest.fixture
-def sample_conversation_data() -> dict:
-    """Sample conversation data for testing."""
+def sample_conversation_messages() -> list[dict[str, str]]:
+    """Sample message payload used by multiple fixtures."""
+    return [
+        {
+            "role": "user",
+            "content": "Hello, this is a test message",
+            "timestamp": "2025-01-16T10:00:00Z",
+        },
+        {
+            "role": "assistant",
+            "content": "This is a test response",
+            "timestamp": "2025-01-16T10:00:01Z",
+        },
+    ]
+
+
+@pytest.fixture
+def sample_conversation_data(sample_conversation_messages) -> dict:
+    """Dataclass-friendly conversation for collector tests."""
+
+    def to_datetime(value: str) -> datetime:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+    messages = [
+        Message(
+            role=msg["role"],
+            content=msg["content"],
+            timestamp=to_datetime(msg["timestamp"]),
+        )
+        for msg in sample_conversation_messages
+    ]
+
+    created = messages[0].timestamp
+    updated = messages[-1].timestamp
+
     return {
+        "id": "conv-test-123",
         "source": "claude-code",
-        "thread_id": "test-thread-123",
         "title": "Test Conversation",
+        "messages": messages,
+        "created_at": created,
+        "updated_at": updated,
+        "thread_id": "test-thread-123",
         "project": "mindbase",
         "tags": ["test", "development"],
-        "messages": [
-            {
-                "role": "user",
-                "content": "Hello, this is a test message",
-                "timestamp": "2025-01-16T10:00:00Z",
-            },
-            {
-                "role": "assistant",
-                "content": "This is a test response",
-                "timestamp": "2025-01-16T10:00:01Z",
-            },
-        ],
+        "metadata": {"model": "claude-sonnet-4.5", "temperature": 0.7},
+    }
+
+
+@pytest.fixture
+def api_conversation_payload(sample_conversation_messages) -> dict:
+    """API payload matching ConversationCreate schema."""
+    messages = deepcopy(sample_conversation_messages)
+    return {
+        "source": "claude-code",
+        "source_conversation_id": "test-thread-123",
+        "title": "Test Conversation",
+        "content": {
+            "messages": messages,
+            "tags": ["test", "development"],
+            "project": "mindbase",
+        },
         "metadata": {
             "model": "claude-sonnet-4.5",
             "temperature": 0.7,
@@ -178,9 +215,12 @@ def pytest_collection_modifyitems(config, items):
     """Automatically mark tests based on location."""
     for item in items:
         # Mark tests by directory
-        if "unit" in str(item.fspath):
+        path = str(item.fspath)
+        if "unit" in path:
             item.add_marker(pytest.mark.unit)
-        elif "integration" in str(item.fspath):
+        elif "integration" in path:
             item.add_marker(pytest.mark.integration)
-        elif "e2e" in str(item.fspath):
+            item.add_marker(pytest.mark.asyncio(loop_scope="session"))
+        elif "e2e" in path:
             item.add_marker(pytest.mark.e2e)
+            item.add_marker(pytest.mark.asyncio(loop_scope="session"))

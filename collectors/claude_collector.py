@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 import struct
 
-from base_collector import BaseCollector, Conversation, Message
+from .base_collector import BaseCollector, Conversation, Message
 
 logger = logging.getLogger(__name__)
 
