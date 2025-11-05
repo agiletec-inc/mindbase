@@ -34,6 +34,6 @@ async def health_check():
     return {
         "status": "healthy" if services["database"] == "connected" else "degraded",
         "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0",
+        "version": "1.1.0",
         "services": services,
     }

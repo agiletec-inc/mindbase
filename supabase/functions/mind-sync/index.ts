@@ -246,7 +246,7 @@ POST /functions/v1/mind-sync
     }
   ],
   "sourceInfo": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "platform": "claude-desktop-mac",
     "timestamp": "2024-12-17T12:00:00Z"
   }

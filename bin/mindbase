@@ -177,7 +177,7 @@ def health():
 
 def version():
     """Show version"""
-    print("MindBase v1.0.0")
+    print("MindBase v1.1.0")
 
 
 def main():

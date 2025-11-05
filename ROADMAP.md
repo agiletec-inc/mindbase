@@ -1,7 +1,7 @@
 # MindBase Development Roadmap
 
 **Project**: AI Conversation Knowledge Management System
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Timeline**: 2025 Q4 - 2026 Q2
 **Last Updated**: 2025-10-14
 

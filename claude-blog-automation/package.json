@@ -1,6 +1,6 @@
 {
   "name": "claude-blog-automation",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Claude Code conversation history to blog articles",
   "type": "module",
   "scripts": {

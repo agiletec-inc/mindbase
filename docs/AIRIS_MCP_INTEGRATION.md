@@ -2,7 +2,7 @@
 
 **Project**: MindBase - AI Conversation Knowledge Management
 **Component**: Airis MCP Gateway Integration Layer
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Last Updated**: 2025-10-14
 
 ---
@@ -290,7 +290,7 @@ result = mindbase_store(
 ```json
 {
   "name": "mindbase",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI Conversation Knowledge Management - Search and store conversations",
   "base_url": "http://mindbase-api:18002",
   "tools": [

@@ -1,7 +1,7 @@
 # MindBase Architecture
 
 **Project**: AI Conversation Knowledge Management System
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Last Updated**: 2025-10-14
 
 ---

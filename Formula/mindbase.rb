@@ -1,7 +1,7 @@
 class Mindbase < Formula
   desc "AI conversation knowledge management system with MCP integration"
   homepage "https://github.com/agiletec-inc/mindbase"
-  url "https://github.com/agiletec-inc/mindbase/archive/refs/tags/v1.0.0.tar.gz"
+  url "https://github.com/agiletec-inc/mindbase/archive/refs/tags/v1.1.0.tar.gz"
   sha256 "" # Will be calculated on release
   license "MIT"
   head "https://github.com/agiletec-inc/mindbase.git", branch: "master"
@@ -77,7 +77,7 @@ class Mindbase < Formula
 
   test do
     system bin/"mindbase", "version"
-    assert_match "MindBase v1.0.0", shell_output("#{bin}/mindbase version")
+    assert_match "MindBase v1.1.0", shell_output("#{bin}/mindbase version")
 
     # Test health (requires service running)
     # system bin/"mindbase", "health"

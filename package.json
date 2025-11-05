@@ -1,6 +1,6 @@
 {
   "name": "mindbase",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI Conversation Knowledge Management - Local-First, Privacy-Focused",
   "private": true,
   "type": "module",

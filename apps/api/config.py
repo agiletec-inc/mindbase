@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # API
     DEBUG: bool = False
     API_TITLE: str = "MindBase API"
-    API_VERSION: str = "1.0.0"
+    API_VERSION: str = "1.1.0"
     API_DESCRIPTION: str = "AI Conversation Knowledge Management System"
 
     # CORS
