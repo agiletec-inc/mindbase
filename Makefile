@@ -23,6 +23,44 @@ endif
 OLLAMA_METHOD := docker
 OLLAMA_URL := http://ollama:11434
 
+# Load database settings from .env when available
+POSTGRES_USER_VAR := $(shell grep -E '^POSTGRES_USER=' .env 2>/dev/null | tail -n 1 | cut -d= -f2)
+POSTGRES_DB_VAR := $(shell grep -E '^POSTGRES_DB=' .env 2>/dev/null | tail -n 1 | cut -d= -f2)
+POSTGRES_PASSWORD_VAR := $(shell grep -E '^POSTGRES_PASSWORD=' .env 2>/dev/null | tail -n 1 | cut -d= -f2)
+EMBEDDING_MODEL_VAR := $(shell grep -E '^EMBEDDING_MODEL=' .env 2>/dev/null | tail -n 1 | cut -d= -f2)
+EMBEDDING_DIMENSIONS_VAR := $(shell grep -E '^EMBEDDING_DIMENSIONS=' .env 2>/dev/null | tail -n 1 | cut -d= -f2)
+
+ifeq ($(strip $(POSTGRES_USER_VAR)),)
+POSTGRES_USER_VAR := mindbase
+endif
+
+ifeq ($(strip $(POSTGRES_DB_VAR)),)
+POSTGRES_DB_VAR := mindbase
+endif
+
+ifeq ($(strip $(POSTGRES_PASSWORD_VAR)),)
+POSTGRES_PASSWORD_VAR := mindbase_dev
+endif
+
+ifeq ($(strip $(EMBEDDING_MODEL_VAR)),)
+EMBEDDING_MODEL_VAR := qwen3-embedding:8b
+endif
+
+ifeq ($(strip $(EMBEDDING_DIMENSIONS_VAR)),)
+EMBEDDING_DIMENSIONS_VAR := 4096
+endif
+
+TEST_DATABASE_URL ?= postgresql+asyncpg://$(POSTGRES_USER_VAR):$(POSTGRES_PASSWORD_VAR)@postgres:5432/mindbase_test
+TEST_OLLAMA_URL ?= http://ollama:11434
+
+MIGRATION_FILES := \
+	20241217120000_mind_base_schema.sql \
+	20241217130000_analysis_triggers.sql \
+	20250101000000_mindbase_postgresql.sql \
+	20250202090000_conversation_enrichment.sql \
+	20251017000000_mcp_server_schema.sql \
+	20251019000000_memory_storage.sql
+
 ## help: 全コマンド一覧表示
 help:
 	@echo "MindBase - AI Conversation Knowledge Management"
@@ -179,8 +217,15 @@ endif
 
 ## migrate: データベースマイグレーション
 migrate:
-	@echo "🗄️  Running database migrations..."
-	docker compose exec postgres psql -U mindbase -d mindbase -f /docker-entrypoint-initdb.d/20241217120000_mind_base_schema.sql
+	@echo "🗄️  Running database migrations (DB=$(POSTGRES_DB_VAR))..."
+	@for file in $(MIGRATION_FILES); do \
+		echo "   → $$file"; \
+		if [ "$$file" = "20241217120000_mind_base_schema.sql" ]; then \
+			docker compose exec postgres bash -lc "psql -v ON_ERROR_STOP=1 -U $(POSTGRES_USER_VAR) -d $(POSTGRES_DB_VAR) -f /docker-entrypoint-initdb.d/$$file" || true; \
+		else \
+			docker compose exec postgres bash -lc "psql -v ON_ERROR_STOP=1 -U $(POSTGRES_USER_VAR) -d $(POSTGRES_DB_VAR) -f /docker-entrypoint-initdb.d/$$file"; \
+		fi; \
+	done
 	@echo "✅ Migrations completed"
 
 ## api-shell: APIコンテナシェル
@@ -189,10 +234,17 @@ api-shell:
 
 ## db-shell: PostgreSQLシェル
 db-shell:
-	docker compose exec postgres psql -U mindbase -d mindbase
+	docker compose exec postgres psql -U $(POSTGRES_USER_VAR) -d $(POSTGRES_DB_VAR)
 
 define RUN_IN_CONTAINER
-	docker compose exec api bash -lc 'set -euo pipefail; \
+	docker compose run --rm --no-deps \
+		-e TEST_DATABASE_URL=$(TEST_DATABASE_URL) \
+		-e TEST_OLLAMA_URL=$(TEST_OLLAMA_URL) \
+		-e EMBEDDING_MODEL=$(EMBEDDING_MODEL_VAR) \
+		-e EMBEDDING_DIMENSIONS=$(EMBEDDING_DIMENSIONS_VAR) \
+		-e DATABASE_URL=$(TEST_DATABASE_URL) \
+		-e OLLAMA_URL=$(TEST_OLLAMA_URL) \
+		api bash -lc 'set -euo pipefail; \
 		SRC=/workspace/mindbase; \
 		WORK=/tmp/mindbase; \
 		rm -rf "$$WORK"; \

@@ -1,7 +1,7 @@
 """Conversation SQLAlchemy model"""
 
-from sqlalchemy import Column, String, Integer, DateTime, Text, CheckConstraint, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Integer, DateTime, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from pgvector.sqlalchemy import Vector
 from datetime import datetime
 import uuid
@@ -33,8 +33,12 @@ class Conversation(Base):
     participant_count = Column(Integer, default=2)
     message_count = Column(Integer, default=0)
 
-    # Vector embedding (qwen3-embedding:8b = 1024 dimensions)
-    embedding = Column(Vector(1024))
+    # Vector embedding (qwen3-embedding:8b = 4096 dimensions)
+    embedding = Column(Vector(4096))
+
+    # Derived metadata
+    project = Column(String)
+    topics = Column(ARRAY(String), default=list)
 
     # Timestamps
     source_created_at = Column(DateTime(timezone=True))
@@ -42,10 +46,6 @@ class Conversation(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint(
-            "source IN ('claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf', 'slack', 'email', 'google-docs')",
-            name="valid_source",
-        ),
         UniqueConstraint("source", "source_conversation_id", name="unique_source_conversation"),
     )
 

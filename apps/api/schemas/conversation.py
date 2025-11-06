@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 
 class ConversationCreate(BaseModel):
@@ -15,6 +15,11 @@ class ConversationCreate(BaseModel):
     content: dict[str, Any] = Field(..., description="Full conversation content (JSONB)")
     metadata: Optional[dict[str, Any]] = Field(default_factory=dict, description="Custom metadata")
     source_created_at: Optional[datetime] = Field(None, description="Original creation time")
+    project: Optional[str] = Field(None, description="Detected or assigned project name")
+    topics: Optional[List[str]] = Field(
+        default=None,
+        description="List of detected topics associated with the conversation"
+    )
 
     class Config:
         json_schema_extra = {
@@ -40,8 +45,10 @@ class ConversationResponse(BaseModel):
     source_conversation_id: Optional[str]
     title: Optional[str]
     content: dict[str, Any]
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
     message_count: int
+    project: Optional[str]
+    topics: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -56,6 +63,8 @@ class SearchQuery(BaseModel):
     limit: int = Field(10, description="Maximum number of results", ge=1, le=100)
     threshold: float = Field(0.8, description="Similarity threshold", ge=0.0, le=1.0)
     source: Optional[str] = Field(None, description="Filter by source")
+    project: Optional[str] = Field(None, description="Filter by project identifier")
+    topic: Optional[str] = Field(None, description="Filter by topic tag")
 
     class Config:
         json_schema_extra = {
@@ -63,7 +72,9 @@ class SearchQuery(BaseModel):
                 "query": "PM Agent autonomous investigation",
                 "limit": 10,
                 "threshold": 0.8,
-                "source": "claude-code"
+                "source": "claude-code",
+                "project": "superclaude",
+                "topic": "Testing Strategy"
             }
         }
 
@@ -75,6 +86,8 @@ class SearchResult(BaseModel):
     title: Optional[str]
     source: str
     similarity: float
+    project: Optional[str]
+    topics: List[str] = Field(default_factory=list)
     created_at: datetime
     content_preview: str = Field(..., description="First 200 chars of content")
 

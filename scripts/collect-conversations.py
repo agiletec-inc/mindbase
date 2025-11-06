@@ -174,6 +174,10 @@ def conversation_to_payload(conversation: Conversation) -> Dict:
 
     if conversation.created_at:
         payload["source_created_at"] = conversation.created_at.isoformat()
+    if conversation.project:
+        payload["project"] = conversation.project
+    if conversation.tags:
+        payload["topics"] = conversation.tags
 
     return payload
 

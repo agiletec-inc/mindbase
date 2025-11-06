@@ -26,7 +26,7 @@ log "⏰ Threshold: ${ARCHIVE_THRESHOLD_DAYS} days"
 mkdir -p "$ARCHIVE_DIR"/{agiletec,mkk,ec-cloud-app,global}
 
 # Count conversations
-total_files=$(find "$CLAUDE_DIR" -name "*.jsonl" -type f 2>/dev/null | wc -l | xargs)
+total_files=$(find "$CLAUDE_DIR" -name "*.jsonl" -type f 2>/dev/null | wc -l | awk '{print $1}')
 log "📊 Found $total_files conversation files"
 
 # Collect old conversations (>N days)
@@ -64,11 +64,11 @@ for file in $old_files; do
 done
 
 # Summary statistics
-agiletec_count=$(ls -1 "$ARCHIVE_DIR/agiletec" 2>/dev/null | wc -l | xargs)
-mkk_count=$(ls -1 "$ARCHIVE_DIR/mkk" 2>/dev/null | wc -l | xargs)
-ec_count=$(ls -1 "$ARCHIVE_DIR/ec-cloud-app" 2>/dev/null | wc -l | xargs)
-global_count=$(ls -1 "$ARCHIVE_DIR/global" 2>/dev/null | wc -l | xargs)
-remaining_count=$(find "$CLAUDE_DIR" -name "*.jsonl" -type f 2>/dev/null | wc -l | xargs)
+agiletec_count=$(ls -1 "$ARCHIVE_DIR/agiletec" 2>/dev/null | wc -l | awk '{print $1}')
+mkk_count=$(ls -1 "$ARCHIVE_DIR/mkk" 2>/dev/null | wc -l | awk '{print $1}')
+ec_count=$(ls -1 "$ARCHIVE_DIR/ec-cloud-app" 2>/dev/null | wc -l | awk '{print $1}')
+global_count=$(ls -1 "$ARCHIVE_DIR/global" 2>/dev/null | wc -l | awk '{print $1}')
+remaining_count=$(find "$CLAUDE_DIR" -name "*.jsonl" -type f 2>/dev/null | wc -l | awk '{print $1}')
 
 log "📊 Archive Summary:"
 log "  agiletec: $agiletec_count files"

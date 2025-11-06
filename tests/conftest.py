@@ -1,7 +1,6 @@
 """
 Pytest configuration and shared fixtures for MindBase tests.
 """
-import asyncio
 import os
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -10,12 +9,48 @@ from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from collectors.base_collector import Message
 from app.config import Settings
 from app.database import Base
+from app.models.conversation import Conversation  # noqa: F401
+
+
+@pytest_asyncio.fixture
+async def async_client(
+    test_engine: AsyncEngine,
+) -> AsyncGenerator["AsyncClient", None]:
+    """Async HTTP client bound to the FastAPI app."""
+    from httpx import AsyncClient
+    from app.main import app
+    from app.database import get_db
+
+    async_session = async_sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async def override_get_db():
+        async with async_session() as session:
+            try:
+                yield session
+            finally:
+                await session.rollback()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        yield client
+
+    app.dependency_overrides.pop(get_db, None)
 
 
 # ========================================
@@ -32,14 +67,14 @@ def test_settings() -> Settings:
     return Settings(
         DATABASE_URL=os.getenv(
             "TEST_DATABASE_URL",
-            os.getenv("DATABASE_URL", "")
+            os.getenv("DATABASE_URL", "postgresql+asyncpg://mindbase:mindbase_dev@postgres:5432/mindbase_test")
         ),
         OLLAMA_URL=os.getenv(
             "TEST_OLLAMA_URL",
             os.getenv("OLLAMA_URL", "")
         ),
         EMBEDDING_MODEL=os.getenv("EMBEDDING_MODEL", "qwen3-embedding:8b"),
-        EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "1024")),
+        EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "4096")),
         DEBUG=True,
     )
 
@@ -48,9 +83,50 @@ def test_settings() -> Settings:
 # Database Fixtures
 # ========================================
 
+@pytest_asyncio.fixture(scope="session")
+async def ensure_test_database(test_settings: Settings) -> None:
+    """Ensure the dedicated test database and required extensions exist."""
+    url = make_url(test_settings.DATABASE_URL)
+
+    admin_url = url.set(database="postgres")
+    admin_engine = create_async_engine(
+        admin_url,
+        isolation_level="AUTOCOMMIT",
+        future=True,
+    )
+
+    async with admin_engine.begin() as conn:
+        result = await conn.execute(
+            text("SELECT 1 FROM pg_database WHERE datname = :name"),
+            {"name": url.database},
+        )
+        if result.scalar() is None:
+            await conn.execute(text(f'CREATE DATABASE "{url.database}"'))
+    await admin_engine.dispose()
+
+    # Ensure extensions inside the test database
+    extension_engine = create_async_engine(
+        test_settings.DATABASE_URL,
+        isolation_level="AUTOCOMMIT",
+        future=True,
+    )
+    async with extension_engine.begin() as conn:
+        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
+        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "vector";'))
+        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pg_trgm";'))
+    await extension_engine.dispose()
+
+
 @pytest_asyncio.fixture
-async def test_engine(test_settings: Settings) -> AsyncGenerator[AsyncEngine, None]:
+async def test_engine(
+    ensure_test_database: None,
+    test_settings: Settings,
+) -> AsyncGenerator[AsyncEngine, None]:
     """Create test database engine."""
+    if "test" not in test_settings.DATABASE_URL:
+        raise RuntimeError(
+            f"Refusing to run tests against non-test database: {test_settings.DATABASE_URL}"
+        )
     engine = create_async_engine(
         test_settings.DATABASE_URL,
         echo=test_settings.DEBUG,
@@ -74,7 +150,7 @@ async def test_engine(test_settings: Settings) -> AsyncGenerator[AsyncEngine, No
 @pytest_asyncio.fixture
 async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     """Create database session for tests."""
-    async_session = sessionmaker(
+    async_session = async_sessionmaker(
         test_engine,
         class_=AsyncSession,
         expire_on_commit=False,
@@ -83,6 +159,8 @@ async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, N
     async with async_session() as session:
         yield session
         await session.rollback()
+
+
 
 
 # ========================================
@@ -115,10 +193,47 @@ def temp_archive_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mock_ollama_response() -> dict:
-    """Mock Ollama embedding response (qwen3-embedding:8b: 1024-dim)."""
+    """Mock Ollama embedding response (qwen3-embedding:8b: 4096-dim)."""
     return {
-        "embedding": [0.1] * 1024,  # 1024-dimensional vector (qwen3-embedding:8b)
+        "embedding": [0.1] * 4096,
     }
+
+
+@pytest.fixture(autouse=True)
+def stub_ollama_requests(monkeypatch, test_settings: Settings):
+    """Stub Ollama HTTP calls to avoid hitting external services."""
+    from httpx import Response, Request
+    from app.ollama_client import OllamaClient, ollama_client
+
+    async def fake_request(self, method: str, path: str, **kwargs):
+        request = Request(method, f"{self.base_url}{path}")
+        if path == "/api/version":
+            return Response(200, json={"version": "mock"}, request=request)
+        if path == "/api/tags":
+            return Response(
+                200,
+                json={"models": [{"name": self.model}]},
+                request=request,
+            )
+        if path == "/api/embeddings":
+            return Response(
+                200,
+                json={"embedding": [0.1] * test_settings.EMBEDDING_DIMENSIONS},
+                request=request,
+            )
+        return Response(200, json={}, request=request)
+
+    monkeypatch.setattr(OllamaClient, "_request", fake_request, raising=False)
+
+    # Ensure shared client uses the same behaviour
+    async def fake_embed(text: str):
+        return [0.1] * test_settings.EMBEDDING_DIMENSIONS
+
+    async def fake_embed_batch(texts):
+        return [[0.1] * test_settings.EMBEDDING_DIMENSIONS for _ in texts]
+
+    monkeypatch.setattr(ollama_client, "embed", fake_embed, raising=False)
+    monkeypatch.setattr(ollama_client, "embed_batch", fake_embed_batch, raising=False)
 
 
 @pytest.fixture

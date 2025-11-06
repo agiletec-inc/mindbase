@@ -1,5 +1,7 @@
 """Conversation API endpoints"""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,8 +14,10 @@ from app.schemas.conversation import (
 )
 from app.crud import conversation as crud
 from app.ollama_client import ollama_client
+from app.services.classifier import infer_project, infer_topics
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/store", response_model=ConversationResponse)
@@ -32,20 +36,65 @@ async def store_conversation(
         # Extract text for embedding
         if "messages" in conversation.content:
             messages = conversation.content["messages"]
-            text_content = " ".join([msg.get("content", "") for msg in messages if "content" in msg])
+            flattened_messages = [str(msg.get("content", "")) for msg in messages if "content" in msg]
+            text_content = " ".join(flattened_messages)
+            message_count = len(flattened_messages)
+            raw_content = "\n\n".join(flattened_messages)
         else:
             text_content = str(conversation.content)
+            message_count = 0
+            raw_content = None
 
         # Generate embedding via Ollama
         embedding = await ollama_client.embed(text_content)
 
+        metadata = dict(conversation.metadata or {})
+        project = infer_project(
+            metadata=conversation.metadata,
+            content=conversation.content,
+            text=text_content,
+            explicit=conversation.project or metadata.get("project"),
+        )
+        topics = infer_topics(
+            text_content,
+            existing=conversation.topics or metadata.get("topics"),
+        )
+
+        if project:
+            metadata["project"] = project
+        metadata["topics"] = topics
+
         # Store in database
-        db_conversation = await crud.create_conversation(db, conversation, embedding)
+        db_conversation = await crud.create_conversation(
+            db,
+            conversation,
+            embedding,
+            message_count=message_count,
+            raw_content=raw_content,
+            project=project,
+            topics=topics,
+            metadata=metadata,
+        )
 
-        return db_conversation
+        response = ConversationResponse(
+            id=db_conversation.id,
+            source=db_conversation.source,
+            source_conversation_id=db_conversation.source_conversation_id,
+            title=db_conversation.title,
+            content=db_conversation.content,
+            metadata=metadata,
+            message_count=db_conversation.message_count,
+            project=project,
+            topics=topics,
+            created_at=db_conversation.created_at,
+            updated_at=db_conversation.updated_at,
+        )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to store conversation: {str(e)}")
+        return response
+
+    except Exception as exc:  # pragma: no cover - surfaced via HTTP response
+        logger.exception("Failed to store conversation")
+        raise HTTPException(status_code=500, detail=f"Failed to store conversation: {exc}") from exc
 
 
 @router.post("/search", response_model=list[SearchResult])
@@ -70,7 +119,9 @@ async def search_conversations_endpoint(
             query_embedding=query_embedding,
             limit=query.limit,
             threshold=query.threshold,
-            source=query.source
+            source=query.source,
+            project=query.project,
+            topic=query.topic,
         )
 
         # Format results
@@ -90,6 +141,8 @@ async def search_conversations_endpoint(
                     id=row.id,
                     title=row.title,
                     source=row.source,
+                    project=row.project,
+                    topics=row.topics or [],
                     similarity=row.similarity,
                     created_at=row.created_at,
                     content_preview=preview
@@ -98,5 +151,6 @@ async def search_conversations_endpoint(
 
         return search_results
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+    except Exception as exc:  # pragma: no cover
+        logger.exception("Failed to search conversations")
+        raise HTTPException(status_code=500, detail=f"Search failed: {exc}") from exc
