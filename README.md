@@ -84,9 +84,24 @@ make migrate
 
 # 6. Check service health
 make health  # API lives at http://localhost:18002
+
+# 7. (Optional) Run the raw derivation worker
+make worker
 ```
 
 All conversation data lives in the PostgreSQL volume declared in `docker-compose.yml` (`postgres_data_dev`). Remove that volume when you want a clean slate; nothing is written to random App Support folders.
+
+### Menu bar companion (preview)
+
+Need a quick glance at collector status without touching the terminal? A lightweight Electron menu bar app now lives in `apps/menubar`. It polls `/health`, shows the state of collectors/pipelines, and links into docs/settings.
+
+```bash
+cd apps/menubar
+pnpm install   # first run only
+pnpm dev
+```
+
+Look for the MindBase dot in your macOS menu bar. Use **Settings…** to update the API base URL, workspace root, or custom collector definitions.
 
 ## API reference
 
