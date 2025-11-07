@@ -17,10 +17,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 from collectors.base_collector import Message
 from app.config import Settings
 from app.database import Base
-from app.models.conversation import Conversation  # noqa: F401
+from app.models.conversation import Conversation, RawConversation  # noqa: F401
 
 
 @pytest_asyncio.fixture
@@ -93,6 +94,7 @@ async def ensure_test_database(test_settings: Settings) -> None:
         admin_url,
         isolation_level="AUTOCOMMIT",
         future=True,
+        poolclass=NullPool,
     )
 
     async with admin_engine.begin() as conn:
@@ -109,6 +111,7 @@ async def ensure_test_database(test_settings: Settings) -> None:
         test_settings.DATABASE_URL,
         isolation_level="AUTOCOMMIT",
         future=True,
+        poolclass=NullPool,
     )
     async with extension_engine.begin() as conn:
         await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
@@ -131,6 +134,7 @@ async def test_engine(
         test_settings.DATABASE_URL,
         echo=test_settings.DEBUG,
         future=True,
+        poolclass=NullPool,
     )
 
     # Create all tables
@@ -294,6 +298,7 @@ def api_conversation_payload(sample_conversation_messages) -> dict:
         "source": "claude-code",
         "source_conversation_id": "test-thread-123",
         "title": "Test Conversation",
+        "workspace": "/workspaces/tests",
         "content": {
             "messages": messages,
             "tags": ["test", "development"],
@@ -335,7 +340,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.unit)
         elif "integration" in path:
             item.add_marker(pytest.mark.integration)
-            item.add_marker(pytest.mark.asyncio(loop_scope="session"))
+            item.add_marker(pytest.mark.asyncio(loop_scope="function"))
         elif "e2e" in path:
             item.add_marker(pytest.mark.e2e)
-            item.add_marker(pytest.mark.asyncio(loop_scope="session"))
+            item.add_marker(pytest.mark.asyncio(loop_scope="function"))

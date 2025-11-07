@@ -15,6 +15,7 @@ async def test_store_conversation_persists_metadata(
         "source": "claude-code",
         "source_conversation_id": f"test-{uuid.uuid4()}",
         "title": "Timeline stitching prototype",
+        "workspace": "/workspaces/platform",
         "content": {
             "messages": [
                 {"role": "user", "content": "Docker compose deployment failed"},
@@ -31,6 +32,8 @@ async def test_store_conversation_persists_metadata(
     data = response.json()
     assert data["project"] == "platform"
     assert data["topics"] == ["Docker-First Development"]
+    assert data["workspace_path"] == "/workspaces/platform"
+    assert data["raw_id"] is not None
 
     # Verify persistence
     search_response = await async_client.post(
@@ -38,14 +41,16 @@ async def test_store_conversation_persists_metadata(
         json={
             "query": "docker compose",
             "project": "platform",
+            "workspace_path": "/workspaces/platform",
             "limit": 1,
             "threshold": 0.1,
         },
     )
     assert search_response.status_code == 200
     results = search_response.json()
-    assert any(item["id"] == data["id"] for item in results)
+    assert any(item["id"] == data["id"] and item["raw_id"] == data["raw_id"] for item in results)
     assert any(item["topics"] == ["Docker-First Development"] for item in results)
+    assert all(item["workspace_path"] == "/workspaces/platform" for item in results)
 
 
 @pytest.mark.asyncio
@@ -56,6 +61,7 @@ async def test_search_conversations_supports_filters(
     base_payload = {
         "source": "cursor",
         "title": "LLM search tuning",
+        "workspace": "/workspaces/research",
         "content": {
             "messages": [
                 {
@@ -75,6 +81,7 @@ async def test_search_conversations_supports_filters(
         payload = base_payload | {
             "source_conversation_id": f"{project}-{uuid.uuid4()}",
             "content": base_payload["content"] | {"project": project},
+            "workspace": f"/workspaces/{project}",
         }
         response = await async_client.post("/conversations/store", json=payload)
         assert response.status_code == 200, response.text
@@ -85,6 +92,7 @@ async def test_search_conversations_supports_filters(
         json={
             "query": "docker compose",
             "project": "platform",
+            "workspace_path": "/workspaces/platform",
             "limit": 5,
             "threshold": 0.1,
         },
@@ -94,6 +102,8 @@ async def test_search_conversations_supports_filters(
     results = response.json()
     assert len(results) == 1
     assert results[0]["project"] == "platform"
+    assert results[0]["workspace_path"] == "/workspaces/platform"
+    assert results[0]["raw_id"] is not None
     assert "Docker-First Development" in results[0]["topics"]
 
 
