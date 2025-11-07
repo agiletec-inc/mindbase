@@ -20,8 +20,16 @@ else
     PLATFORM := other
 endif
 
-OLLAMA_METHOD := docker
-OLLAMA_URL := http://ollama:11434
+ifeq ($(PLATFORM),apple_silicon)
+    DEFAULT_OLLAMA_METHOD := native
+    DEFAULT_OLLAMA_URL := http://localhost:11434
+else
+    DEFAULT_OLLAMA_METHOD := docker
+    DEFAULT_OLLAMA_URL := http://ollama:11434
+endif
+
+OLLAMA_METHOD ?= $(DEFAULT_OLLAMA_METHOD)
+OLLAMA_URL ?= $(DEFAULT_OLLAMA_URL)
 
 # Load database settings from .env when available
 POSTGRES_USER_VAR := $(shell grep -E '^POSTGRES_USER=' .env 2>/dev/null | tail -n 1 | cut -d= -f2)
@@ -51,13 +59,18 @@ EMBEDDING_DIMENSIONS_VAR := 4096
 endif
 
 TEST_DATABASE_URL ?= postgresql+asyncpg://$(POSTGRES_USER_VAR):$(POSTGRES_PASSWORD_VAR)@postgres:5432/mindbase_test
+ifeq ($(OLLAMA_METHOD),native)
+TEST_OLLAMA_URL ?= http://localhost:11434
+else
 TEST_OLLAMA_URL ?= http://ollama:11434
+endif
 
 MIGRATION_FILES := \
 	20241217120000_mind_base_schema.sql \
 	20241217130000_analysis_triggers.sql \
 	20250101000000_mindbase_postgresql.sql \
 	20250202090000_conversation_enrichment.sql \
+	20250202093000_raw_conversations.sql \
 	20251017000000_mcp_server_schema.sql \
 	20251019000000_memory_storage.sql
 
@@ -124,7 +137,18 @@ endif
 ## up: 全サービス起動
 up:
 	@echo "🚀 Starting MindBase services ($(PLATFORM))..."
+ifeq ($(OLLAMA_METHOD),native)
+	@if ! command -v ollama >/dev/null 2>&1; then \
+		echo "❌ Native Ollama not found. Run: make install-ollama"; \
+		exit 1; \
+	fi
+	@if ! pgrep -x "ollama" >/dev/null 2>&1; then \
+		echo "⚠️  Ollama server is not running. Start it via 'ollama serve' in another terminal."; \
+	fi
+	docker compose up -d --remove-orphans
+else
 	docker compose --profile ollama up -d --remove-orphans
+endif
 	@echo "✅ Services started"
 	@echo ""
 	@echo "  API:        http://localhost:18002"
