@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     API_TITLE: str = "MindBase API"
     API_VERSION: str = "1.1.0"
     API_DESCRIPTION: str = "AI Conversation Knowledge Management System"
+    DERIVE_ON_STORE: bool = True
+    MINDBASE_SETTINGS_PATH: str | None = None
+    DERIVER_BATCH_SIZE: int = 5
+    DERIVER_IDLE_SECONDS: int = 5
+    DERIVER_MAX_RETRIES: int = 3
 
     # CORS
     CORS_ORIGINS: list[str] = ["*"]

@@ -93,7 +93,7 @@ All conversation data lives in the PostgreSQL volume declared in `docker-compose
 
 ### Menu bar companion (preview)
 
-Need a quick glance at collector status without touching the terminal? A lightweight Electron menu bar app now lives in `apps/menubar`. It polls `/health`, shows the state of collectors/pipelines, and links into docs/settings.
+Need a quick glance at collector status without touching the terminal? A lightweight Electron menu bar app now lives in `apps/menubar`. It polls `/health`, shows the state of collectors/pipelines, lets you trigger `make up/down/logs/worker`, and talks to the same Settings API exposed by FastAPI.
 
 ```bash
 cd apps/menubar
@@ -101,7 +101,7 @@ pnpm install   # first run only
 pnpm dev
 ```
 
-Look for the MindBase dot in your macOS menu bar. Use **Settings…** to update the API base URL, workspace root, or custom collector definitions.
+Look for the MindBase dot in your macOS menu bar. Use **Settings…** to update the API base URL, workspace root、リポジトリパス、カスタム collector 定義（変更は `/settings` エンドポイント経由でAPIにも反映されます）。
 
 ## API reference
 

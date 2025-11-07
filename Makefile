@@ -1,7 +1,7 @@
 # MindBase Makefile - Docker-First Development
 # 標準コマンド: makefile-global準拠
 
-.PHONY: help up down restart logs ps clean clean-all config test
+.PHONY: help up down restart logs ps clean clean-all config test worker
 
 # デフォルトターゲット
 .DEFAULT_GOAL := help
@@ -71,6 +71,7 @@ MIGRATION_FILES := \
 	20250101000000_mindbase_postgresql.sql \
 	20250202090000_conversation_enrichment.sql \
 	20250202093000_raw_conversations.sql \
+	20250202100000_raw_processing_metadata.sql \
 	20251017000000_mcp_server_schema.sql \
 	20251019000000_memory_storage.sql
 
@@ -303,6 +304,11 @@ test-e2e:
 ## test-cov: カバレッジレポート付きテスト
 test-cov:
 	$(call RUN_IN_CONTAINER,pytest tests/ -v --cov=app --cov=collectors --cov-report=html --cov-report=term-missing)
+
+## worker: RAW ingestion derivation worker
+worker:
+	@echo "🧵 Starting raw ingestion worker..."
+	PYTHONPATH=apps/api python apps/api/workers/raw_deriver.py
 
 ## clean: ローカル成果物削除
 clean:

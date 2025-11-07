@@ -1,6 +1,7 @@
 {
   "apiBaseUrl": "http://localhost:18002",
   "workspaceRoot": "~/github/mindbase",
+  "repoRoot": "~/github/mindbase",
   "refreshIntervalMs": 15000,
   "collectors": [
     { "id": "claude-code", "label": "Claude Code", "workspace": "mindbase" },

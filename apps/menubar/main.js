@@ -1,8 +1,11 @@
 const { app, Tray, Menu, BrowserWindow, shell, nativeImage, ipcMain } = require("electron");
+const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 
 const DEFAULT_REFRESH_MS = 15000;
+const DEFAULT_REPO_ROOT = path.join(os.homedir(), "github", "mindbase");
 const DEFAULT_ICON_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAAnUlEQVR42mNgoCZIT0//PwMDA8O/f/8GQkND4+HhYTgYGBj+//8/Dw4O/j8jIyMYGhqKqqqqQEJCwoKCgoyMjCCtra3Pz8/Y2Nj45OTk4eHh4f///0NGxgYGD4zMzMhJSUFOzs7AwMDA2NjY/j8/P1RUVFhZWSn29vZSEhLi19eXlZWFqaurm7w9fUlq6urlZSUkJ6enngFI5NDY2BgYGAPdCCxYcX1/gQAAAABJRU5ErkJggg==";
 
@@ -45,6 +48,7 @@ const ensureSettings = () => {
   }
   const contents = fs.readFileSync(settingsPath, "utf-8");
   settings = JSON.parse(contents);
+  settings.repoRoot = settings.repoRoot || DEFAULT_REPO_ROOT;
 };
 
 const persistSettings = (overrides) => {
@@ -101,6 +105,16 @@ const buildServicesMenu = () => {
   }));
 };
 
+const runMakeCommand = (command, args = []) => {
+  const repo = path.resolve(settings.repoRoot || DEFAULT_REPO_ROOT);
+  const child = spawn("make", [command, ...args], {
+    cwd: repo,
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+};
+
 const buildMenu = () => {
   const template = [
     {
@@ -109,6 +123,23 @@ const buildMenu = () => {
         const docsUrl = `${settings.apiBaseUrl.replace(/\/$/, "")}/docs`;
         shell.openExternal(docsUrl);
       },
+    },
+    { type: "separator" },
+    {
+      label: "Start Stack (make up)",
+      click: () => runMakeCommand("up"),
+    },
+    {
+      label: "Stop Stack (make down)",
+      click: () => runMakeCommand("down"),
+    },
+    {
+      label: "Logs (make logs)",
+      click: () => runMakeCommand("logs"),
+    },
+    {
+      label: "Run Worker",
+      click: () => runMakeCommand("worker"),
     },
     { type: "separator" },
     {
@@ -173,6 +204,18 @@ const createTray = () => {
   tray.setContextMenu(buildMenu());
 };
 
+const fetchServerSettings = async () => {
+  try {
+    const url = `${settings.apiBaseUrl.replace(/\/$/, "")}/settings`;
+    const resp = await fetch(url);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    persistSettings({ ...settings, ...data });
+  } catch (_) {
+    /* ignore */
+  }
+};
+
 const refreshHealth = async (manual = false) => {
   const endpoint = `${settings.apiBaseUrl.replace(/\/$/, "")}/health`;
   try {
@@ -223,8 +266,21 @@ const openSettingsWindow = () => {
 };
 
 const registerIpc = () => {
-  ipcMain.handle("settings:get", () => settings);
-  ipcMain.handle("settings:save", (_event, updated) => {
+  ipcMain.handle("settings:get", async () => {
+    await fetchServerSettings();
+    return settings;
+  });
+  ipcMain.handle("settings:save", async (_event, updated) => {
+    try {
+      const url = `${settings.apiBaseUrl.replace(/\/$/, "")}/settings`;
+      await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+    } catch (error) {
+      /* fall back to local only */
+    }
     persistSettings(updated);
     if (settingsWindow) {
       settingsWindow.webContents.send("settings:updated", settings);
@@ -237,6 +293,7 @@ const bootstrap = async () => {
   await app.whenReady();
   app.dock?.hide();
   ensureSettings();
+  await fetchServerSettings();
   createTray();
   registerIpc();
   await refreshHealth(true);

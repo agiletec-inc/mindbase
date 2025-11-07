@@ -5,9 +5,10 @@ Simple Electron-based menu bar application that keeps an eye on the local MindBa
 ### Features
 
 - Polls the FastAPI `/health` endpoint and shows API, database, and Ollama status indicators.
-- Lists configured collectors/pipelines from `settings.json` so you always know which workspace they belong to.
-- Quick links to docs, issue tracker, and the existing Settings UI.
-- Editable settings (API base URL, workspace root, refresh interval, collectors, pipelines) stored under `~/Library/Application Support/mindbase-menubar`.
+- Lists configured collectors/pipelines from the shared Settings API so you always know which workspace they belong to.
+- One-click `make up`, `make down`, `make logs`, and `make worker` helpers (runs in the configured repo root).
+- Quick links to docs、issue tracker、Settings UI (which updates the server-side settings store).
+- Editable settings (API base URL, workspace root, repo root, refresh interval, collectors, pipelines) stored under `~/Library/Application Support/mindbase-menubar` and synced to the API.
 
 ### Development
 

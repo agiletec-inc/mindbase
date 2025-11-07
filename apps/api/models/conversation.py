@@ -37,6 +37,7 @@ class RawConversation(Base):
     inserted_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     processed_at = Column(DateTime(timezone=True))
     processing_error = Column(Text)
+    retry_count = Column(Integer, default=0)
 
     conversations = relationship(
         "Conversation",

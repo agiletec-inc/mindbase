@@ -70,6 +70,26 @@ class ConversationQueuedResponse(BaseModel):
     status: Literal["queued"] = "queued"
 
 
+class CollectorConfig(BaseModel):
+    id: str
+    label: str
+    workspace: Optional[str] = None
+
+
+class PipelineConfig(BaseModel):
+    id: str
+    label: str
+
+
+class AppSettings(BaseModel):
+    apiBaseUrl: str = Field("http://localhost:18002", description="MindBase API URL")
+    workspaceRoot: str = Field("~/github/mindbase", description="Default workspace")
+    repoRoot: str = Field("~/github/mindbase", description="Path where make commands run")
+    refreshIntervalMs: int = Field(15000, description="Menubar poll interval in milliseconds")
+    collectors: List[CollectorConfig] = Field(default_factory=list)
+    pipelines: List[PipelineConfig] = Field(default_factory=list)
+
+
 class SearchQuery(BaseModel):
     """Schema for semantic search query"""
 
