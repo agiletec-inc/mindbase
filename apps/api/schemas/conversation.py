@@ -90,6 +90,15 @@ class AppSettings(BaseModel):
     pipelines: List[PipelineConfig] = Field(default_factory=list)
 
 
+class CommandResult(BaseModel):
+    """Represents the outcome of a control command."""
+
+    action: str
+    returncode: int
+    stdout: str
+    stderr: str
+
+
 class SearchQuery(BaseModel):
     """Schema for semantic search query"""
 

@@ -4,7 +4,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.api.routes import health, conversations, embeddings, settings as settings_routes
+from app.api.routes import (
+    control,
+    conversations,
+    embeddings,
+    health,
+    settings as settings_routes,
+)
 
 settings = get_settings()
 
@@ -29,6 +35,7 @@ app.include_router(health.router)
 app.include_router(conversations.router)
 app.include_router(embeddings.router)
 app.include_router(settings_routes.router)
+app.include_router(control.router)
 
 
 @app.get("/")
