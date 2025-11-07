@@ -37,6 +37,7 @@ LOGGER = logging.getLogger("mindbase.collector")
 
 DEFAULT_API_URL = os.getenv("MINDBASE_API_URL", "http://localhost:18002")
 DEFAULT_BATCH_SIZE = 20
+DEFAULT_WORKSPACE = os.getenv("WORKSPACE_ROOT")
 
 CollectorRegistry = Dict[str, type[ClaudeDesktopCollector]]
 
@@ -105,6 +106,12 @@ def parse_args() -> argparse.Namespace:
         help="Number of conversations to sync per batch",
     )
     parser.add_argument(
+        "--workspace",
+        type=str,
+        default=DEFAULT_WORKSPACE,
+        help="Workspace root path (defaults to WORKSPACE_ROOT env or current directory)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Collect and display stats without syncing to API",
@@ -163,6 +170,8 @@ def conversation_to_payload(conversation: Conversation) -> Dict:
         content["project"] = conversation.project
     if conversation.tags:
         content["tags"] = conversation.tags
+    if conversation.workspace:
+        content["workspace"] = conversation.workspace
 
     payload: Dict[str, object] = {
         "source": conversation.source,
@@ -178,6 +187,11 @@ def conversation_to_payload(conversation: Conversation) -> Dict:
         payload["project"] = conversation.project
     if conversation.tags:
         payload["topics"] = conversation.tags
+    if conversation.workspace:
+        payload["workspace"] = conversation.workspace
+        if payload["metadata"] is None:
+            payload["metadata"] = {}
+        payload["metadata"]["workspace"] = conversation.workspace
 
     return payload
 
@@ -202,6 +216,10 @@ def main() -> int:
 
     since_dt = parse_since(args.since)
     collectors = get_collectors(args.source)
+    workspace_path = args.workspace or os.getenv("WORKSPACE_ROOT")
+    if not workspace_path:
+        workspace_path = os.getcwd()
+    workspace_path = os.path.abspath(workspace_path)
     normalizer = DataNormalizer()
 
     total_collected = 0
@@ -213,7 +231,10 @@ def main() -> int:
         total_collected += len(raw_conversations)
 
         normalized = normalizer.normalize_conversations(raw_conversations, collector.source_name)
-        normalized_conversations.extend(normalized)
+        for conv in normalized:
+            if not conv.workspace:
+                conv.workspace = workspace_path
+            normalized_conversations.append(conv)
 
         stats = collector.get_stats()
         LOGGER.info(
