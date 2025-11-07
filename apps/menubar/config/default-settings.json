@@ -1,0 +1,15 @@
+{
+  "apiBaseUrl": "http://localhost:18002",
+  "workspaceRoot": "~/github/mindbase",
+  "refreshIntervalMs": 15000,
+  "collectors": [
+    { "id": "claude-code", "label": "Claude Code", "workspace": "mindbase" },
+    { "id": "codex", "label": "Codex CLI", "workspace": "mindbase" },
+    { "id": "gemini-cli", "label": "Gemini CLI", "workspace": "mindbase" }
+  ],
+  "pipelines": [
+    { "id": "raw-ingestion", "label": "RAW Ingestion" },
+    { "id": "vector-indexer", "label": "Vector Indexer" },
+    { "id": "story-builder", "label": "MindStory Builder" }
+  ]
+}

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MindBase Settings</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 16px;
+        background: #111622;
+        color: #f5f5f5;
+      }
+      h1 {
+        font-size: 1.2rem;
+        margin-top: 0;
+      }
+      label {
+        display: block;
+        margin-top: 12px;
+        font-size: 0.85rem;
+        color: #a0aec0;
+      }
+      input,
+      textarea {
+        width: 100%;
+        border-radius: 6px;
+        border: 1px solid #2d3748;
+        padding: 8px;
+        background: #1c2233;
+        color: #f5f5f5;
+        font-size: 0.9rem;
+        box-sizing: border-box;
+        margin-top: 4px;
+      }
+      textarea {
+        min-height: 80px;
+        resize: vertical;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 16px;
+        gap: 8px;
+      }
+      button {
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.save {
+        background: #4fd1c5;
+        color: #111;
+      }
+      button.reset {
+        background: transparent;
+        color: #f5f5f5;
+        border: 1px solid #4a5568;
+      }
+      .status {
+        margin-top: 8px;
+        font-size: 0.85rem;
+        color: #4fd1c5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>MindBase Settings</h1>
+    <form id="settings-form">
+      <label>
+        API Base URL
+        <input id="apiBaseUrl" required />
+      </label>
+      <label>
+        Workspace Root
+        <input id="workspaceRoot" required />
+      </label>
+      <label>
+        Refresh Interval (ms)
+        <input id="refreshIntervalMs" type="number" min="5000" step="500" />
+      </label>
+      <label>
+        Collectors (JSON array)
+        <textarea id="collectors"></textarea>
+      </label>
+      <label>
+        Pipelines (JSON array)
+        <textarea id="pipelines"></textarea>
+      </label>
+      <div class="actions">
+        <button type="button" class="reset" id="reset-btn">Reset</button>
+        <button type="submit" class="save">Save</button>
+      </div>
+      <div class="status" id="status"></div>
+    </form>
+
+    <script>
+      const form = document.getElementById("settings-form");
+      const status = document.getElementById("status");
+
+      const fields = {
+        apiBaseUrl: document.getElementById("apiBaseUrl"),
+        workspaceRoot: document.getElementById("workspaceRoot"),
+        refreshIntervalMs: document.getElementById("refreshIntervalMs"),
+        collectors: document.getElementById("collectors"),
+        pipelines: document.getElementById("pipelines"),
+      };
+
+      const setStatus = (text, isError = false) => {
+        status.textContent = text;
+        status.style.color = isError ? "#f56565" : "#4fd1c5";
+      };
+
+      const populate = (data) => {
+        fields.apiBaseUrl.value = data.apiBaseUrl || "";
+        fields.workspaceRoot.value = data.workspaceRoot || "";
+        fields.refreshIntervalMs.value = data.refreshIntervalMs || 15000;
+        fields.collectors.value = JSON.stringify(data.collectors || [], null, 2);
+        fields.pipelines.value = JSON.stringify(data.pipelines || [], null, 2);
+      };
+
+      const loadSettings = async () => {
+        const data = await window.SettingsAPI.get();
+        populate(data);
+      };
+
+      document.getElementById("reset-btn").addEventListener("click", loadSettings);
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const payload = {
+            apiBaseUrl: fields.apiBaseUrl.value.trim(),
+            workspaceRoot: fields.workspaceRoot.value.trim(),
+            refreshIntervalMs: Number(fields.refreshIntervalMs.value) || 15000,
+            collectors: JSON.parse(fields.collectors.value || "[]"),
+            pipelines: JSON.parse(fields.pipelines.value || "[]"),
+          };
+
+          await window.SettingsAPI.save(payload);
+          setStatus("Settings saved.");
+        } catch (error) {
+          console.error(error);
+          setStatus("Failed to save settings. Check JSON fields.", true);
+        }
+      });
+
+      window.SettingsAPI.onUpdate((data) => {
+        populate(data);
+        setStatus("Settings updated from disk.");
+      });
+
+      loadSettings();
+    </script>
+  </body>
+</html>
