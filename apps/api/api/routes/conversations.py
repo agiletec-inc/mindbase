@@ -1,26 +1,30 @@
 """Conversation API endpoints"""
 
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
+from app.crud import conversation as crud
 from app.database import get_db
+from app.ollama_client import ollama_client
 from app.schemas.conversation import (
     ConversationCreate,
+    ConversationQueuedResponse,
     ConversationResponse,
     SearchQuery,
     SearchResult,
 )
-from app.crud import conversation as crud
-from app.ollama_client import ollama_client
-from app.services.classifier import infer_project, infer_topics
+from app.services.deriver import process_raw_conversation
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
-@router.post("/store", response_model=ConversationResponse)
+@router.post("/store", response_model=ConversationResponse | ConversationQueuedResponse)
 async def store_conversation(
     conversation: ConversationCreate,
     db: AsyncSession = Depends(get_db)
@@ -33,64 +37,33 @@ async def store_conversation(
     - Returns stored conversation with ID
     """
     try:
-        # Extract text for embedding
-        if "messages" in conversation.content:
-            messages = conversation.content["messages"]
-            flattened_messages = [str(msg.get("content", "")) for msg in messages if "content" in msg]
-            text_content = " ".join(flattened_messages)
-            message_count = len(flattened_messages)
-            raw_content = "\n\n".join(flattened_messages)
-        else:
-            text_content = str(conversation.content)
-            message_count = 0
-            raw_content = None
+        raw_payload = conversation.model_dump(mode="python")
+        raw_metadata = dict(conversation.metadata or {})
 
-        # Generate embedding via Ollama
-        embedding = await ollama_client.embed(text_content)
-
-        metadata = dict(conversation.metadata or {})
-        project = infer_project(
-            metadata=conversation.metadata,
-            content=conversation.content,
-            text=text_content,
-            explicit=conversation.project or metadata.get("project"),
+        workspace_path = (
+            conversation.workspace
+            or conversation.content.get("workspace")
+            or raw_metadata.get("workspace_path")
         )
-        topics = infer_topics(
-            text_content,
-            existing=conversation.topics or metadata.get("topics"),
-        )
+        if workspace_path:
+            raw_metadata.setdefault("workspace_path", workspace_path)
 
-        if project:
-            metadata["project"] = project
-        metadata["topics"] = topics
-
-        # Store in database
-        db_conversation = await crud.create_conversation(
+        raw_record = await crud.create_raw_conversation(
             db,
             conversation,
-            embedding,
-            message_count=message_count,
-            raw_content=raw_content,
-            project=project,
-            topics=topics,
-            metadata=metadata,
+            raw_payload=raw_payload,
+            raw_metadata=raw_metadata,
+            workspace_path=workspace_path,
+            captured_at=conversation.source_created_at or datetime.utcnow(),
         )
 
-        response = ConversationResponse(
-            id=db_conversation.id,
-            source=db_conversation.source,
-            source_conversation_id=db_conversation.source_conversation_id,
-            title=db_conversation.title,
-            content=db_conversation.content,
-            metadata=metadata,
-            message_count=db_conversation.message_count,
-            project=project,
-            topics=topics,
-            created_at=db_conversation.created_at,
-            updated_at=db_conversation.updated_at,
-        )
+        if settings.DERIVE_ON_STORE:
+            response = await process_raw_conversation(db, raw_record)
+            await db.commit()
+            return response
 
-        return response
+        await db.commit()
+        return ConversationQueuedResponse(raw_id=raw_record.id)
 
     except Exception as exc:  # pragma: no cover - surfaced via HTTP response
         logger.exception("Failed to store conversation")
@@ -122,6 +95,7 @@ async def search_conversations_endpoint(
             source=query.source,
             project=query.project,
             topic=query.topic,
+            workspace_path=query.workspace_path,
         )
 
         # Format results
@@ -144,6 +118,8 @@ async def search_conversations_endpoint(
                     project=row.project,
                     topics=row.topics or [],
                     similarity=row.similarity,
+                    workspace_path=row.workspace_path,
+                    raw_id=row.raw_id,
                     created_at=row.created_at,
                     content_preview=preview
                 )

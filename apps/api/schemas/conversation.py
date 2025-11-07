@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Literal
 
 
 class ConversationCreate(BaseModel):
@@ -11,6 +11,10 @@ class ConversationCreate(BaseModel):
 
     source: str = Field(..., description="Source of conversation (claude-code, chatgpt, etc.)")
     source_conversation_id: Optional[str] = Field(None, description="Original conversation ID from source")
+    workspace: Optional[str] = Field(
+        None,
+        description="Path to the workspace/monorepo root where this conversation originated",
+    )
     title: Optional[str] = Field(None, description="Conversation title")
     content: dict[str, Any] = Field(..., description="Full conversation content (JSONB)")
     metadata: Optional[dict[str, Any]] = Field(default_factory=dict, description="Custom metadata")
@@ -25,6 +29,7 @@ class ConversationCreate(BaseModel):
         json_schema_extra = {
             "example": {
                 "source": "claude-code",
+                "workspace": "/Users/alice/github/mindbase",
                 "title": "SuperClaude PM Agent Enhancement",
                 "content": {
                     "messages": [
@@ -41,6 +46,7 @@ class ConversationResponse(BaseModel):
     """Schema for conversation response"""
 
     id: UUID
+    raw_id: Optional[UUID]
     source: str
     source_conversation_id: Optional[str]
     title: Optional[str]
@@ -49,11 +55,19 @@ class ConversationResponse(BaseModel):
     message_count: int
     project: Optional[str]
     topics: List[str] = Field(default_factory=list)
+    workspace_path: Optional[str]
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class ConversationQueuedResponse(BaseModel):
+    """Schema returned when derivation is queued."""
+
+    raw_id: UUID
+    status: Literal["queued"] = "queued"
 
 
 class SearchQuery(BaseModel):
@@ -65,6 +79,7 @@ class SearchQuery(BaseModel):
     source: Optional[str] = Field(None, description="Filter by source")
     project: Optional[str] = Field(None, description="Filter by project identifier")
     topic: Optional[str] = Field(None, description="Filter by topic tag")
+    workspace_path: Optional[str] = Field(None, description="Filter by workspace path")
 
     class Config:
         json_schema_extra = {
@@ -74,7 +89,8 @@ class SearchQuery(BaseModel):
                 "threshold": 0.8,
                 "source": "claude-code",
                 "project": "superclaude",
-                "topic": "Testing Strategy"
+                "topic": "Testing Strategy",
+                "workspace_path": "/Users/alice/github/mindbase",
             }
         }
 
@@ -83,11 +99,13 @@ class SearchResult(BaseModel):
     """Schema for search result"""
 
     id: UUID
+    raw_id: Optional[UUID]
     title: Optional[str]
     source: str
     similarity: float
     project: Optional[str]
     topics: List[str] = Field(default_factory=list)
+    workspace_path: Optional[str]
     created_at: datetime
     content_preview: str = Field(..., description="First 200 chars of content")
 
