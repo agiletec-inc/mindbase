@@ -54,6 +54,7 @@ class Conversation:
     updated_at: datetime
     thread_id: Optional[str] = None  # Original thread/conversation ID
     project: Optional[str] = None
+    workspace: Optional[str] = None
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     
