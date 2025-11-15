@@ -5,11 +5,54 @@
 
 > **100 % local, zero vendor lock-in.** PostgreSQL 17 + pgvector + FastAPI + Ollama (qwen3-embedding:8b). No API keys, no hosted dependencies, completely free to run on your own machine.
 
+## 🌟 Part of the AIRIS Ecosystem
+
+MindBase is the **memory substrate** of the **AIRIS Suite** - providing persistent, semantic conversation history across all AI coding assistants.
+
+### The AIRIS Suite
+
+| Component | Purpose | For Who |
+|-----------|---------|---------|
+| **[airis-agent](https://github.com/agiletec-inc/airis-agent)** | 🧠 Intelligence layer for all editors (confidence checks, deep research, self-review) | All developers using Claude Code, Cursor, Windsurf, Codex, Gemini CLI |
+| **[airis-mcp-gateway](https://github.com/agiletec-inc/airis-mcp-gateway)** | 🚪 Unified MCP proxy with 90% token reduction via lazy loading | Claude Code users who want faster startup |
+| **mindbase** (this repo) | 💾 Local cross-session memory with semantic search | Developers who want persistent conversation history |
+| **[airis-workspace](https://github.com/agiletec-inc/airis-workspace)** | 🏗️ Docker-first monorepo manager | Teams building monorepos |
+| **[airiscode](https://github.com/agiletec-inc/airiscode)** | 🖥️ Terminal-first autonomous coding agent | CLI-first developers |
+
+### MCP Servers (Included via Gateway)
+
+- **[airis-mcp-supabase-selfhost](https://github.com/agiletec-inc/airis-mcp-supabase-selfhost)** - Self-hosted Supabase MCP with RLS support
+- **mindbase** (this repo) - Memory search & storage tools (`mindbase_search`, `mindbase_store`)
+
+### Quick Install: Complete AIRIS Suite
+
+```bash
+# Option 1: Install airis-agent plugin (recommended for Claude Code users)
+/plugin marketplace add agiletec-inc/airis-agent
+/plugin install airis-agent
+
+# Option 2: Clone all AIRIS repositories at once
+uv run airis-agent install-suite --profile core
+
+# Option 3: Just use MindBase standalone (you're already here!)
+git clone https://github.com/kazukinakai/mindbase.git ~/github/mindbase
+cd ~/github/mindbase && make up
+```
+
+**What you get with the full suite:**
+- ✅ Confidence-gated workflows (prevents wrong-direction coding)
+- ✅ Deep research with evidence synthesis
+- ✅ 94% token reduction via repository indexing
+- ✅ Cross-session memory across all editors
+- ✅ Self-review and post-implementation validation
+
+---
+
 ## Position in the AIRIS stack
 
 MindBase is the durable conversation memory service that the AIRIS MCP Gateway taps into. AIRIS acts as the gateway and tool orchestrator, while MindBase focuses on storing and retrieving conversations with semantic recall. That separation keeps responsibilities crisp:
 
-- **AIRIS MCP Gateway** – registers any MCP server (including MindBase), handles the “tool roster” problem by lazily streaming tool descriptions to the LLM, and keeps overall context windows under control.
+- **AIRIS MCP Gateway** – registers any MCP server (including MindBase), handles the "tool roster" problem by lazily streaming tool descriptions to the LLM, and keeps overall context windows under control.
 - **MindBase** – provides the `mindbase_search` and `mindbase_store` MCP tools plus an HTTP API. It runs as a Mac-friendly Docker stack so your editors, agents, and AIRIS can persist or query conversations without touching the cloud.
 
 Because AIRIS only loads tool instructions when the model actually chooses MindBase, you avoid the hot-load issue where twenty richly documented tools explode the prompt budget. MindBase simply exposes concise capabilities; AIRIS decides when and how to surface them.
