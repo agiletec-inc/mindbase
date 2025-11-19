@@ -24,18 +24,27 @@ MindBase is the **memory substrate** of the **AIRIS Suite** - providing persiste
 - **[airis-mcp-supabase-selfhost](https://github.com/agiletec-inc/airis-mcp-supabase-selfhost)** - Self-hosted Supabase MCP with RLS support
 - **mindbase** (this repo) - Memory search & storage tools (`mindbase_search`, `mindbase_store`)
 
-### Quick Install: Complete AIRIS Suite
+### Recommended: Install via AIRIS MCP Gateway
+
+MindBase comes **pre-configured** with AIRIS MCP Gateway. No additional setup required.
 
 ```bash
-# Option 1: Install airis-agent plugin (recommended for Claude Code users)
-/plugin marketplace add agiletec-inc/airis-agent
-/plugin install airis-agent
+# Install the Gateway (includes MindBase)
+brew install agiletec-inc/tap/airis-mcp-gateway
 
-# Option 2: Clone all AIRIS repositories at once
-uv run airis-agent install-suite --profile core
+# Start the gateway
+airis-mcp-gateway up
 
-# Option 3: Just use MindBase standalone (you're already here!)
-git clone https://github.com/kazukinakai/mindbase.git ~/github/mindbase
+# Add to Claude Code
+claude mcp add --transport http airis-mcp-gateway http://api.gateway.localhost:9400/api/v1/mcp
+```
+
+### Alternative: Standalone Installation
+
+If you need to run MindBase independently:
+
+```bash
+git clone https://github.com/agiletec-inc/mindbase.git ~/github/mindbase
 cd ~/github/mindbase && make up
 ```
 
