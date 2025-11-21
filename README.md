@@ -77,6 +77,15 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
+│ Menubar App (Electron) ✨ NEW: Auto-Collection                           │
+│  - File system watcher (FSEvents) for conversation directories           │
+│  - Auto-triggers collectors on new conversation detection                │
+│  - Toggle: ✓ Auto-Collection Enabled                                    │
+│  - Health monitoring with status indicators (🟢🟡🔴)                     │
+└───────────────┬──────────────────────────────────────────────────────────┘
+                │ Auto-runs Python collectors
+                ▼
+┌──────────────────────────────────────────────────────────────────────────┐
 │ Collectors (Python)                                                      │
 │  - Cursor / Windsurf / VS Code logs                                      │
 │  - Claude Desktop / Claude Code exports                                  │
@@ -143,17 +152,27 @@ make worker
 
 All conversation data lives in the PostgreSQL volume declared in `docker-compose.yml` (`postgres_data_dev`). Remove that volume when you want a clean slate; nothing is written to random App Support folders.
 
-### Menu bar companion (preview)
+### Menu bar companion ✨ Auto-Collection
 
-Need a quick glance at collector status without touching the terminal? A lightweight Electron menu bar app now lives in `apps/menubar`. It polls `/health`, shows the state of collectors/pipelines, lets you trigger `make up/down/logs/worker`, and talks to the same Settings API exposed by FastAPI.
+A lightweight Electron menu bar app that **automatically collects AI conversations** from Claude Code, Cursor, Windsurf, and ChatGPT. It monitors conversation directories and triggers collectors on file changes.
 
+**Features:**
+- **Auto-Collection Toggle**: Enable/disable via menu bar (✓ Auto-Collection Enabled)
+- **File System Watcher**: Monitors `~/.claude/`, `~/.cursor/`, `~/Library/Application Support/Windsurf/`, etc.
+- **Auto-Collector Execution**: Runs Python collectors when new conversations are detected
+- **Health Monitoring**: Shows API, database, and Ollama status (🟢🟡🔴)
+- **Quick Commands**: One-click `make up/down/logs/worker`
+
+**Setup:**
 ```bash
 cd apps/menubar
 pnpm install   # first run only
-pnpm dev
+pnpm dev       # or from root: pnpm dev:menubar
 ```
 
-Look for the MindBase dot in your macOS menu bar. Use **Settings…** to update the API base URL, workspace root、リポジトリパス、カスタム collector 定義（変更は `/settings` エンドポイント経由でAPIにも反映されます）。
+Look for the MindBase icon in your macOS menu bar. Click **"Auto-Collection Disabled"** to toggle ON. The watcher will start monitoring conversation directories and automatically run collectors when new files are detected.
+
+Use **Settings…** to update the API base URL, workspace root, repository path, and custom collector definitions (changes sync to API via `/settings` endpoint).
 
 ## API reference
 
@@ -230,6 +249,39 @@ Responses include similarity scores, timestamps, metadata, and the original mess
    ```
 4. Open the PR with a Conventional Commit title, describe the change, list the commands you ran, and attach API traces or screenshots when relevant.
 
+---
+
+## 🔗 Related Projects
+
+Explore other tools in the AIRIS ecosystem:
+
+- **[airis-mcp-gateway](https://github.com/agiletec-inc/airis-mcp-gateway)** - Unified MCP hub with 90% token reduction
+- **[airis-agent](https://github.com/agiletec-inc/airis-agent)** - Intelligence layer for AI coding (confidence checks, deep research)
+- **[airis-mcp-supabase-selfhost](https://github.com/agiletec-inc/airis-mcp-supabase-selfhost)** - Self-hosted Supabase MCP with RLS support
+- **[airis-workspace](https://github.com/agiletec-inc/airis-workspace)** - Docker-first monorepo manager
+- **[cmd-ime](https://github.com/agiletec-inc/cmd-ime)** - macOS IME switcher (Cmd key toggle)
+- **[neural](https://github.com/agiletec-inc/neural)** - Local LLM translation tool (DeepL alternative)
+- **[airiscode](https://github.com/agiletec-inc/airiscode)** - Terminal-first autonomous coding agent
+
+---
+
+## 💖 Support This Project
+
+If you find MindBase helpful, consider supporting its development:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/kazukinakai)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-sponsor-pink?style=for-the-badge&logo=github)](https://github.com/sponsors/kazukinakai)
+
+Your support helps maintain and improve all AIRIS projects!
+
+---
+
 ## License
 
 MindBase is released under the [MIT License](LICENSE).
+
+---
+
+**Built with ❤️ by the [Agiletec](https://github.com/agiletec-inc) team**
+
+**[Agiletec Inc.](https://github.com/agiletec-inc)** | **[Documentation](docs/)** | **[Issues](https://github.com/agiletec-inc/mindbase/issues)** | **[Discussions](https://github.com/agiletec-inc/mindbase/discussions)**
