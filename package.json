@@ -1,43 +1,31 @@
 {
-  "name": "mindbase",
-  "version": "1.1.0",
-  "description": "AI Conversation Knowledge Management - Local-First, Privacy-Focused",
+  "_generated": {
+    "by": "airis init",
+    "from": "manifest.toml",
+    "warning": "⚠️  DO NOT EDIT - Update manifest.toml then rerun `airis init`"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "name": "airis-mindbase",
+  "packageManager": "pnpm@10.22.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @mindbase/settings dev",
-    "dev:api": "cd apps/api && uvicorn app.main:app --reload --host 0.0.0.0 --port 18002",
-    "dev:mcp": "pnpm --filter @mindbase/mcp-server dev",
-    "build": "pnpm -r build",
-    "extract": "tsx libs/processors/extract-modules.ts",
-    "generate": "tsx libs/generators/generate-article.ts",
-    "publish": "tsx libs/generators/publish-qiita.ts",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
-    "clean": "pnpm -r clean"
+    "build": "echo 'Run: airis build'",
+    "dev": "echo 'Run: airis dev'",
+    "lint": "echo 'Run: airis lint'",
+    "test": "echo 'Run: airis test'"
   },
-  "keywords": [
-    "claude-code",
-    "mindbase",
-    "blog-automation",
-    "conversation-archive",
-    "qiita",
-    "zenn"
+  "type": "module",
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "libs/*"
   ],
-  "author": "kazuki",
-  "license": "MIT",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.0",
-    "pg": "^8.16.3",
-    "pgvector": "^0.2.1",
-    "uuid": "^13.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.8.0",
-    "@types/pg": "^8.15.5",
-    "@types/uuid": "^11.0.0",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "@swc/core"
+    ]
   }
 }

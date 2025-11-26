@@ -3,6 +3,7 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { ConversationWatcher } = require("./watcher");
 
 const DEFAULT_REFRESH_MS = 15000;
 const DEFAULT_REPO_ROOT = path.join(os.homedir(), "github", "mindbase");
@@ -14,6 +15,7 @@ let settingsWindow;
 let settingsPath;
 let settings = null;
 let refreshTimer = null;
+let watcher = null;
 
 const state = {
   health: null,
@@ -55,6 +57,11 @@ const persistSettings = (overrides) => {
   settings = { ...settings, ...overrides };
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   scheduleRefresh();
+
+  // Restart watcher if auto-collection settings changed
+  if (watcher && overrides.autoCollection) {
+    watcher.restart(settings);
+  }
 };
 
 const statusIcon = (status) => {
@@ -115,7 +122,27 @@ const runMakeCommand = (command, args = []) => {
   child.unref();
 };
 
+const toggleAutoCollection = () => {
+  const enabled = !settings.autoCollection?.enabled;
+  const updated = {
+    ...settings,
+    autoCollection: {
+      ...settings.autoCollection,
+      enabled,
+    },
+  };
+  persistSettings(updated);
+
+  if (enabled && watcher) {
+    watcher.start();
+  } else if (!enabled && watcher) {
+    watcher.stop();
+  }
+};
+
 const buildMenu = () => {
+  const autoCollectionEnabled = settings.autoCollection?.enabled || false;
+
   const template = [
     {
       label: "Open MindBase Dashboard",
@@ -123,6 +150,13 @@ const buildMenu = () => {
         const docsUrl = `${settings.apiBaseUrl.replace(/\/$/, "")}/docs`;
         shell.openExternal(docsUrl);
       },
+    },
+    { type: "separator" },
+    {
+      label: autoCollectionEnabled
+        ? "✓ Auto-Collection Enabled"
+        : "Auto-Collection Disabled",
+      click: () => toggleAutoCollection(),
     },
     { type: "separator" },
     {
@@ -289,6 +323,12 @@ const registerIpc = () => {
   });
 };
 
+const onConversationDetected = (source, fullPath, filename) => {
+  console.log(`[Main] Conversation detected: ${source}/${filename}`);
+  // You can add notifications here
+  // new Notification({ title: 'New Conversation', body: `${source}: ${filename}` }).show();
+};
+
 const bootstrap = async () => {
   await app.whenReady();
   app.dock?.hide();
@@ -298,6 +338,13 @@ const bootstrap = async () => {
   registerIpc();
   await refreshHealth(true);
   scheduleRefresh();
+
+  // Initialize conversation watcher
+  watcher = new ConversationWatcher(settings, onConversationDetected);
+  if (settings.autoCollection?.enabled) {
+    watcher.start();
+    console.log("[Main] Auto-collection enabled, watcher started");
+  }
 };
 
 app.on("window-all-closed", (event) => {

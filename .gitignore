@@ -138,3 +138,9 @@ coverage/
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# airis-workspace generated files
+.airis/
+manifest.toml
+workspace.yaml
+.envrc

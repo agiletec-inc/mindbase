@@ -1,7 +1,7 @@
 # MindBase Makefile - Docker-First Development
 # 標準コマンド: makefile-global準拠
 
-.PHONY: help up down restart logs ps clean clean-all config test worker
+.PHONY: help up down restart logs ps clean clean-all config test worker menubar-build menubar-run menubar-install menubar-clean
 
 # デフォルトターゲット
 .DEFAULT_GOAL := help
@@ -105,6 +105,12 @@ help:
 	@echo "  test-integration - Run integration tests only"
 	@echo "  test-e2e        - Run E2E tests only"
 	@echo "  test-cov        - Run tests with coverage report"
+	@echo ""
+	@echo "Menubar App (macOS):"
+	@echo "  menubar-build   - Build macOS menubar app (.app bundle)"
+	@echo "  menubar-run     - Launch menubar app"
+	@echo "  menubar-install - Install to /Applications"
+	@echo "  menubar-clean   - Clean build artifacts"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean        - Remove local artifacts (node_modules, __pycache__)"
@@ -309,6 +315,29 @@ test-cov:
 worker:
 	@echo "🧵 Starting raw ingestion worker..."
 	PYTHONPATH=apps/api python apps/api/workers/raw_deriver.py
+
+## menubar-build: Build macOS menubar app (.app bundle)
+menubar-build:
+	@echo "🔨 Building MindBase Menubar app..."
+	@bash scripts/build-menubar-app.sh
+
+## menubar-run: Launch menubar app
+menubar-run: menubar-build
+	@echo "🚀 Launching MindBase Menubar..."
+	@open build/MindBaseMenubar.app
+
+## menubar-install: Install menubar app to /Applications
+menubar-install: menubar-build
+	@echo "📦 Installing MindBase Menubar to /Applications..."
+	@cp -r build/MindBaseMenubar.app /Applications/
+	@echo "✅ Installed to /Applications/MindBaseMenubar.app"
+
+## menubar-clean: Clean menubar build artifacts
+menubar-clean:
+	@echo "🧹 Cleaning menubar build artifacts..."
+	@rm -rf build/MindBaseMenubar.app
+	@rm -rf apps/menubar-swift/.build
+	@echo "✅ Menubar build artifacts cleaned"
 
 ## clean: ローカル成果物削除
 clean:

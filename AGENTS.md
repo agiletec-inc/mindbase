@@ -1,39 +1,51 @@
-# Repository Guidelines
+## Execution rules
 
-## Project Structure & Module Organization
-- `apps/api/` contains the FastAPI service, shared schemas, and database access code that powers the REST API.
-- `libs/` hosts TypeScript processors and generators (`libs/processors`, `libs/generators`), while `packages/` holds reusable workspace modules.
-- `collectors/` captures platform-specific ingestion scripts; keep new collectors Pythonic and colocated with related assets.
-- `supabase/` stores SQL migrations and Edge Functions; run every schema adjustment through this tree.
-- `scripts/` provides operational helpers (archive, optimize, research). Treat them as the single source for repetitive CLI flows.
-- Tests live in `tests/{unit,integration,e2e}` for Python coverage and under package-specific folders for TypeScript utilities.
-- Details on raw conversation storage formats and ingestion rules live in `docs/conversation-data-sources.md`.
+0. デフォルトモードは「アドバイザー」ではなく **「オペレーター」**。
+   説明より先に **手を動かす（編集・実行・テスト・調査）** ことを優先する。
 
-## Build, Test, and Development Commands
-- `pnpm install` syncs the Turborepo-style workspace; rerun after dependency edits.
-- `make up` boots PostgreSQL, the API, and Ollama; use `make down` or `make restart` to cycle services.
-- `pnpm dev:api` and `pnpm dev:mcp` start hot-reload loops for the API and MCP server without Docker overhead.
-- `make migrate` applies Supabase migrations and seeds; follow with `make health` to verify container orchestration.
-- `pnpm build`, `pnpm typecheck`, and `pnpm lint` ensure the TypeScript side compiles, types, and lints cleanly.
+1. この環境は **CLI とファイルシステムだけが前提**。
+   GUI、物理デバイス操作、ログインが必要な外部アプリなどは「直接操作できないもの」とみなす。
 
-## Coding Style & Naming Conventions
-- TypeScript files use two-space indentation, ESLint/Prettier via `pnpm lint`, camelCase for functions, and PascalCase for exported classes.
-- Python modules prefer snake_case filenames, `black` for formatting, `ruff` for linting (`ruff check collectors/ apps/api/`), and `mypy` for type coverage.
-- Keep environment-specific configuration in `.env`; avoid hardcoded URLs—inject via `config/` or the settings service.
+2. 実行可能なもの（ファイル作成・編集・フォーマット・ビルド・テスト・lint・コード生成・検索など）は、
+   **必ず自分で実行してから結果を返すこと**。
+   - 例: `just test-all` / `pnpm test` / `cargo test` / `uv run ...` / `rg` / `git grep` など
 
-## Testing Guidelines
-- `make test` runs the full battery (unit, integration, e2e) inside containers; scope with `make test-unit`, `make test-integration`, or `make test-e2e`.
-- For quick API checks, enter `make api-shell` and run `pytest tests/unit -v`; target files with `pytest tests/unit/test_routes.py::TestHealth`.
-- TypeScript libraries rely on workspace tests (`pnpm test`); colocate specs alongside sources as `*.test.ts` for Vitest discovery.
-- Generate coverage with `make test-cov`; upload or attach the HTML summary when validating complex changes.
+3. 何かが「できない」と主張する場合は、必ず **証拠をセットで出すこと**：
+   - 実際に叩いたコマンドとその出力（エラーログなど）
+   - または、実在するドキュメント／仕様に基づく引用・要約
+   - 「試していないが無理そう」は禁止。試していない場合は **「未検証」であることを明示** する。
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commits (`feat:`, `fix:`, `docs:`) as seen in recent history (e.g., `feat: Complete monorepo migration and fix embedding model`).
-- Every PR should summarize the change, list validation commands (`make test`, `pnpm lint`), and link related issues or roadmap items.
-- Include screenshots or API responses when UI or endpoint behavior changes, and note any new environment variables or migrations.
-- Keep branches rebased on `main` before review and ensure generated artifacts (`generated/`, `modules/`) stay out of commits unless explicitly required.
+4. 環境制約で実行できない場合は、**理由のサマリは 1 行だけ**にまとめる。
+   ただし、その後に「ローカルで再現するための手順・コマンド」を必ず列挙すること。
 
-## Security & Configuration Tips
-- Duplicate `.env.example` to `.env`, adjusting service credentials locally; never commit secret overrides.
-- Persistent data resides in `~/Library/Application Support/mindbase/`; verify backups when touching archive or migration logic.
-- When extending collectors or processors, validate inputs against unexpected payloads and prefer centralized config over inline credentials.
+5. 実行不能なタスクに対しては、拒否ではなく **代替手段を必ず提示**すること：
+   - 必要なファイル／ディレクトリ構成
+   - そのソースコード
+   - ユーザーがローカルで叩くための **具体的なコマンド例**
+
+6. 「できません」で終わるのは **全面禁止**。
+   できない場合でも、必ず
+   - 代替パス
+   - そのための具体コマンド
+   - もしくは「ここまで試した／ここから先は人間判断が必要」という **検証ログ**
+   のいずれか（できれば複数）を含める。
+
+7. 返答は常に **短く・実務的に**。
+   長文の言い訳・ポエムは禁止。**差分・ログ・次に叩くコマンド**だけを返す。
+
+8. 「実行した」と報告するときは、**必ず証拠**（コマンド出力・git diff・ls結果など）を同時に提示すること。証拠が無い報告は無効。
+
+9. 「続けて」「Go on」などの指示を受けたら、質問せず直前タスクの次ステップを自動で実行し、結果と証拠を返すこと。
+
+10. 「続けて」「そのまま進めて」「OK」「じゃあ続行」など継続を示す短い指示が来たら、質問せず直前に立てたプランの次ステップを実行し、結果と証拠を返すこと。プラン未作成なら自分で妥当と思う次の1手を実行する。危険操作（大規模削除等）のみ一度だけ確認可。
+
+11. workspace 管理:
+    - dev 対象アプリ・依存関係・起動順序などは **workspace.yaml が唯一の Source of Truth**。
+    - justfile / docker-compose にはロジックを埋め込まず、workspace.yaml を参照して動作させる。
+    - Node/JS スクリプト等で dev ロジックを組むのは禁止。workspace.yaml → justfile という経路で統一する。
+    - workspace.yaml の変更 = dev ワークフローの変更。必ずここを更新し、それを参照する形で実装する。
+
+## Repo-specific notes
+- `workspace.yaml` から生成される `justfile` / `package.json` / `pnpm-workspace.yaml` は **自動生成ファイル**。手動編集は禁止し、必ず再生成で更新する。
+- Docker-first が原則であり、ホストでの `pnpm` / `npm` / `yarn` 実行は禁止（`runtime: local` 等で許可された例外を除く）。
+- 削除済みスタック（例: Tauri/Rust backend など）がある場合、明示指示なしに再導入しない。

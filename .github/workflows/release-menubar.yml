@@ -1,0 +1,227 @@
+name: Release Menubar App
+
+on:
+  push:
+    tags:
+      - 'menubar-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release macOS Menubar App
+    runs-on: macos-15  # macOS 15 Sequoia with Xcode 16
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.0'
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/menubar-v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Building version: $VERSION"
+
+      - name: Build .app bundle
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          CONFIGURATION: release
+        run: |
+          echo "🔨 Building MindBase Menubar app..."
+          bash scripts/build-menubar-app.sh
+
+      - name: Verify .app bundle
+        run: |
+          echo "🔍 Verifying bundle structure..."
+          APP_PATH="build/MindBaseMenubar.app"
+
+          # Check required files
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ .app bundle not found"
+            exit 1
+          fi
+
+          if [ ! -f "$APP_PATH/Contents/Info.plist" ]; then
+            echo "❌ Info.plist not found"
+            exit 1
+          fi
+
+          if [ ! -f "$APP_PATH/Contents/MacOS/MindBaseMenubar" ]; then
+            echo "❌ Executable not found"
+            exit 1
+          fi
+
+          # Validate Info.plist
+          plutil -lint "$APP_PATH/Contents/Info.plist"
+
+          # Display bundle info
+          echo "✅ Bundle validation passed"
+          echo "📊 Bundle info:"
+          du -sh "$APP_PATH"
+          file "$APP_PATH/Contents/MacOS/MindBaseMenubar"
+
+      - name: Create tarball
+        id: tarball
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TARBALL="mindbase-menubar-${VERSION}-universal.tar.gz"
+
+          cd build
+          tar -czf "../${TARBALL}" MindBaseMenubar.app
+          cd ..
+
+          echo "TARBALL=$TARBALL" >> $GITHUB_OUTPUT
+          echo "📦 Created: $TARBALL"
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          TARBALL="${{ steps.tarball.outputs.TARBALL }}"
+          SHA256=$(shasum -a 256 "$TARBALL" | awk '{print $1}')
+          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+          echo "🔐 SHA256: $SHA256"
+
+      - name: Create Release Notes
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          cat > RELEASE_NOTES.md << EOF
+          ## MindBase Menubar v${VERSION}
+
+          macOS menu bar companion app for MindBase with auto-collection and chat interface.
+
+          ### Installation
+
+          \`\`\`bash
+          # Using Homebrew (recommended)
+          brew tap agiletec-inc/tap
+          brew install mindbase-menubar
+
+          # Launch
+          open /Applications/MindBaseMenubar.app
+          \`\`\`
+
+          ### Features
+
+          - ✅ Menu bar presence indicator (brain icon with status badge)
+          - ✅ Auto-collection toggle (monitors Claude, Cursor, Windsurf, ChatGPT)
+          - ✅ Chat window with qwen2.5:3b (Cmd+Space to open)
+          - ✅ Health monitoring and quick actions
+          - ✅ Native Swift + SwiftUI (no Electron dependencies)
+
+          ### System Requirements
+
+          - macOS 15.0 (Sequoia) or later
+          - Apple Silicon (arm64) or Intel (x86_64)
+          - MindBase API running (http://localhost:\${API_PORT})
+          - Ollama with qwen2.5:3b model
+
+          ### What's New
+
+          See commit history for detailed changes.
+
+          ### Documentation
+
+          - [MindBase README](https://github.com/agiletec-inc/mindbase/blob/main/README.md)
+          - [Menubar App README](https://github.com/agiletec-inc/mindbase/blob/main/apps/menubar-swift/README.md)
+
+          ### Bundle Info
+
+          - Architecture: Universal (Apple Silicon + Intel)
+          - Size: ~500KB
+          - SHA256: \`${{ steps.sha.outputs.SHA256 }}\`
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: menubar-v${{ steps.version.outputs.VERSION }}
+          name: MindBase Menubar v${{ steps.version.outputs.VERSION }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            ${{ steps.tarball.outputs.TARBALL }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: agiletec-inc/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/menubar-v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download release tarball
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TARBALL="mindbase-menubar-${VERSION}-universal.tar.gz"
+
+          echo "📥 Downloading release tarball..."
+          curl -L "https://github.com/${{ github.repository }}/releases/download/menubar-v${VERSION}/${TARBALL}" \
+            -o "$TARBALL"
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TARBALL="mindbase-menubar-${VERSION}-universal.tar.gz"
+          SHA256=$(sha256sum "$TARBALL" | awk '{print $1}')
+          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+          echo "🔐 SHA256: $SHA256"
+
+      - name: Update formula
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          SHA256="${{ steps.sha.outputs.SHA256 }}"
+          TARBALL_URL="https://github.com/${{ github.repository }}/releases/download/menubar-v${VERSION}/mindbase-menubar-${VERSION}-universal.tar.gz"
+
+          cd tap
+
+          # Update Formula/mindbase-menubar.rb
+          sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/mindbase-menubar.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/mindbase-menubar.rb
+          sed -i "s|version \".*\"|version \"${VERSION}\"|" Formula/mindbase-menubar.rb
+
+          echo "✅ Formula updated"
+          cat Formula/mindbase-menubar.rb
+
+      - name: Commit and push
+        run: |
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/mindbase-menubar.rb
+          git commit -m "Update mindbase-menubar to menubar-v${{ steps.version.outputs.VERSION }}"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

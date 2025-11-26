@@ -3,6 +3,11 @@
   "workspaceRoot": "~/github/mindbase",
   "repoRoot": "~/github/mindbase",
   "refreshIntervalMs": 15000,
+  "autoCollection": {
+    "enabled": false,
+    "runCollectorOnDetection": true,
+    "debounceMs": 1000
+  },
   "collectors": [
     { "id": "claude-code", "label": "Claude Code", "workspace": "mindbase" },
     { "id": "codex", "label": "Codex CLI", "workspace": "mindbase" },
