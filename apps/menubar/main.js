@@ -24,13 +24,10 @@ const state = {
 };
 
 const templateIcon = () => {
-  if (nativeImage.createFromNamedImage) {
-    const named = nativeImage.createFromNamedImage("NSStatusAvailable");
-    if (named && !named.isEmpty()) {
-      return named;
-    }
-  }
-  return nativeImage.createFromDataURL(DEFAULT_ICON_DATA_URL);
+  // Use brain emoji as menubar icon (🧠)
+  // Create a simple brain icon data URL
+  const brainIconDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAGKSURBVDiNpZM9SwNBEIbfuVwuCQYLGy1sbKzE/6CFhYWNjYV/wN7OxkbBwkIsLGwsLCwsLCzs/AOChYWFhZ0giIiICPF7c+d4FnuX3OUuJuDAsjvzzszuzC6wZKi/OI9Go+o4Tl1EagCqAMoAigBSAH4BfAPwAHwC+ADwKiLvrusOPc9rLcJYC+44TjWTydwDuAJgLxJERLy2bZ9ns9lbEdnrB+sHqNXrzQKA+9VqtYFlWdMA2LZt53K5vIgkACSBxH8A1Wo1YNv2sYikgyAIut1udHJy8miz2Ww2m+0AuMjlcucDpihJkvmxLOtof3//2HGcPgAgCILg4uKiMzk5uQHgMJ/PXyaTSXqmQFX98vLynIh0AWB9fX0vm83eJJPJcyJKAgBExK/X6+2FQ1Kplj8wMMC2bQvLstYymczN2NjYeblcPgOQHgTx3+7y8rLf6XQoGo2yiLBt22QYBgkhSERYVZVUVUlEWFWV+1dKKZqZmeEpTWdJRP4ej8cAAK7rtoIgeAZw8RfgD9HnhUzGvLdkAAAAAElFTkSuQmCC";
+  return nativeImage.createFromDataURL(brainIconDataURL);
 };
 
 const getConfigDir = () => {
