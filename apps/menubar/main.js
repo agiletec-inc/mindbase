@@ -24,10 +24,13 @@ const state = {
 };
 
 const templateIcon = () => {
-  // Use brain emoji as menubar icon (🧠)
-  // Create a simple brain icon data URL
-  const brainIconDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAGKSURBVDiNpZM9SwNBEIbfuVwuCQYLGy1sbKzE/6CFhYWNjYV/wN7OxkbBwkIsLGwsLCwsLCzs/AOChYWFhZ0giIiICPF7c+d4FnuX3OUuJuDAsjvzzszuzC6wZKi/OI9Go+o4Tl1EagCqAMoAigBSAH4BfAPwAHwC+ADwKiLvrusOPc9rLcJYC+44TjWTydwDuAJgLxJERLy2bZ9ns9lbEdnrB+sHqNXrzQKA+9VqtYFlWdMA2LZt53K5vIgkACSBxH8A1Wo1YNv2sYikgyAIut1udHJy8miz2Ww2m+0AuMjlcucDpihJkvmxLOtof3//2HGcPgAgCILg4uKiMzk5uQHgMJ/PXyaTSXqmQFX98vLynIh0AWB9fX0vm83eJJPJcyJKAgBExK/X6+2FQ1Kplj8wMMC2bQvLstYymczN2NjYeblcPgOQHgTx3+7y8rLf6XQoGo2yiLBt22QYBgkhSERYVZVUVUlEWFWV+1dKKZqZmeEpTWdJRP4ej8cAAK7rtoIgeAZw8RfgD9HnhUzGvLdkAAAAAElFTkSuQmCC";
-  return nativeImage.createFromDataURL(brainIconDataURL);
+  // Simple 16x16 brain-like icon for macOS menubar (template image)
+  // This is a minimal circle with "M" for MindBase
+  const iconDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAjElEQVQ4T2NkoBAwUqifYdAYwMDAwPD/P8P/hob/DAwMDP8ZGBj+MzAw/mdgYPzPwMj4j4GR8T8DI8M/BkbG/wyMDP8YGBn/MjAy/mFgZPzNwMD4m4GR4TcDA+NvBkbGXwyMjD8ZGBl/MDAy/mBgZPjBwMjwnYGR4RsDI8M3BkaGrwyMDF8YGBm+MDAwfAYAk5UkEVFGkd8AAAAASUVORK5CYII=";
+  const icon = nativeImage.createFromDataURL(iconDataURL);
+  // Mark as template so macOS can tint it properly
+  icon.setTemplateImage(true);
+  return icon;
 };
 
 const getConfigDir = () => {
