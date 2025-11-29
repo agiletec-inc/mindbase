@@ -275,8 +275,7 @@ memory_search({
 Python API:        apps/api/                     # ✅ Migrated from app/
 MCP Server:        apps/mcp-server/              # ✅ Migrated from src/mcp-server/
 Settings UI:       apps/settings/                # ✅ React + Vite
-Menubar App:       apps/menubar-swift/           # ✅ Native Swift menubar with auto-collection (recommended)
-Menubar App (old): apps/menubar/                 # ⚠️ Electron version (deprecated)
+Menubar App:       apps/menubar-swift/           # ✅ Native Swift menubar with auto-collection
 Collectors:        libs/collectors/              # ✅ Python conversation collectors
 Processors:        libs/processors/              # ✅ TypeScript content processors
 Generators:        libs/generators/              # ✅ TypeScript article generators
@@ -409,10 +408,8 @@ curl http://localhost:${API_PORT}/health
 pnpm dev                     # Run Settings UI (React)
 pnpm dev:api                 # Run FastAPI backend
 pnpm dev:mcp                 # Run MCP Server
-pnpm dev:menubar             # Run Menubar App (Electron)
-
-# Menubar-specific
-cd apps/menubar && pnpm dev  # Run menubar with auto-collection
+# Menubar (Swift)
+cd apps/menubar-swift && swift build && .build/debug/MindBaseMenubar
 
 # Build and quality
 pnpm build                   # Build all packages
@@ -515,19 +512,17 @@ curl -X POST http://localhost:${API_PORT}/conversations/search \
 - i18n support (react-i18next)
 - Future: Mac menu bar app integration via Tauri
 
-**apps/menubar/** - Menubar App (Electron) ✅ **Auto-Collection**
-- `main.js` - Main process with menu, health polling, watcher integration
-- `watcher.js` - **NEW**: File system watcher for conversation directories
+**apps/menubar-swift/** - Menubar App (Native Swift) ✅ **Auto-Collection**
+- `MindBaseMenubar.swift` - SwiftUI MenuBarExtra with native macOS integration
+- `ConversationWatcher.swift` - File system watcher for conversation directories
   - Monitors: `~/.claude/`, `~/.cursor/`, `~/Library/Application Support/Windsurf/`, etc.
   - Auto-triggers Python collectors on new conversation detection
-  - Debouncing (1s) to prevent duplicate processing
-- `settings.html` - Settings UI for API endpoint, auto-collection toggle
-- `config/default-settings.json` - Default settings with `autoCollection` config
+- `ChatWindow.swift` - Native chat window UI
 - **Key Features**:
-  - Toggle auto-collection via menu bar (✓ Auto-Collection Enabled)
-  - One-click `make up/down/logs/worker` commands
-  - Health monitoring with status indicators (🟢🟡🔴)
-  - Auto-sync settings with FastAPI `/settings` endpoint
+  - Native macOS menu bar icon (brain icon with status badge)
+  - Toggle auto-collection via menu
+  - Health monitoring with API status
+  - Lightweight (~2MB vs Electron's ~150MB)
 
 **Environment Variables**:
 

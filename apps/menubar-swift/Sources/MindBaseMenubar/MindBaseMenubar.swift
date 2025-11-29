@@ -150,134 +150,57 @@ struct MindBaseMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with status
-            VStack(spacing: 8) {
-                HStack {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 10, height: 10)
+        // Status header (disabled, just for display)
+        Text("MindBase — \(appState.apiHealthy ? "✓ Healthy" : "⏳ Checking...")")
 
-                    Text("MindBase")
-                        .font(.system(size: 13, weight: .medium))
+        Divider()
 
-                    Spacer()
+        // Auto-Collection Toggle
+        Toggle(isOn: Binding(
+            get: { appState.autoCollectionEnabled },
+            set: { _ in appState.toggleAutoCollection() }
+        )) {
+            Text("Auto-Collection")
+        }
 
-                    Text(appState.apiHealthy ? "healthy" : "checking…")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
+        Divider()
 
-                // Auto-Collection Toggle
-                HStack {
-                    Text("Auto-Collection")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-
-                    Spacer()
-
-                    Toggle("", isOn: Binding(
-                        get: { appState.autoCollectionEnabled },
-                        set: { _ in appState.toggleAutoCollection() }
-                    ))
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.7)
+        // Quick Actions
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "chat")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if let window = NSApp.windows.first(where: { $0.title == "MindBase Chat" }) {
+                    window.makeKeyAndOrderFront(nil)
+                    window.orderFrontRegardless()
                 }
             }
-            .padding(12)
-
-            Divider()
-
-            // Quick Actions
-            VStack(spacing: 0) {
-                MenuButton(
-                    icon: "message.fill",
-                    title: "Open Chat",
-                    action: {
-                        NSApp.activate(ignoringOtherApps: true)
-                        openWindow(id: "chat")
-
-                        // Ensure window comes to front
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            if let window = NSApp.windows.first(where: { $0.title == "MindBase Chat" }) {
-                                window.makeKeyAndOrderFront(nil)
-                                window.orderFrontRegardless()
-                            }
-                        }
-                    }
-                )
-
-                MenuButton(
-                    icon: "arrow.clockwise",
-                    title: "Refresh Health",
-                    action: {
-                        Task { await appState.checkHealth() }
-                    }
-                )
-
-                MenuButton(
-                    icon: "chart.bar",
-                    title: "Open Dashboard",
-                    action: {
-                        if let url = URL(string: "http://localhost:18002/docs") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                )
-            }
-
-            Divider()
-
-            // Quit
-            Button(action: {
-                NSApplication.shared.terminate(nil)
-            }) {
-                HStack {
-                    Image(systemName: "power")
-                        .frame(width: 16)
-                        .foregroundColor(.secondary)
-                    Text("Quit")
-                        .font(.system(size: 12))
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+        } label: {
+            Label("Open Chat", systemImage: "message.fill")
         }
-        .frame(width: 260)
-    }
 
-    private var statusColor: Color {
-        if !appState.apiHealthy {
-            return .orange
+        Button {
+            Task { await appState.checkHealth() }
+        } label: {
+            Label("Refresh Health", systemImage: "arrow.clockwise")
         }
-        return appState.autoCollectionEnabled ? .green : .gray
-    }
-}
 
-// MARK: - Menu Button Component
-struct MenuButton: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .frame(width: 16)
-                    .foregroundColor(.secondary)
-                Text(title)
-                    .font(.system(size: 12))
-                Spacer()
+        Button {
+            if let url = URL(string: "http://localhost:18002/docs") {
+                NSWorkspace.shared.open(url)
             }
-            .contentShape(Rectangle())
+        } label: {
+            Label("Open Dashboard", systemImage: "chart.bar")
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+
+        Divider()
+
+        Button {
+            NSApplication.shared.terminate(nil)
+        } label: {
+            Label("Quit", systemImage: "power")
+        }
+        .keyboardShortcut("q")
     }
 }
 
