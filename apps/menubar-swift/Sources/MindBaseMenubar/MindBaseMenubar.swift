@@ -5,34 +5,10 @@ struct MindBaseMenubarApp: App {
     @StateObject private var appState = AppState()
 
     var body: some Scene {
-        // Chat Window (先に定義)
-        Window("MindBase Chat", id: "chat") {
-            ChatWindow()
-        }
-        .defaultSize(width: 600, height: 500)
-        .defaultPosition(.center)
-        .windowLevel(.floating)
-
-        // MenuBarExtra (後から定義)
-        MenuBarExtra {
+        // MenuBarExtra only - Chat is separate app
+        MenuBarExtra("MindBase", systemImage: "brain") {
             MindBaseMenu()
                 .environmentObject(appState)
-        } label: {
-            // アイコンは固定で brain
-            ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "brain")
-
-                // ON/OFFバッジ（右下）
-                Circle()
-                    .fill(appState.autoCollectionEnabled ? .green : .red)
-                    .frame(width: 8, height: 8)
-                    .overlay(
-                        Image(systemName: appState.autoCollectionEnabled ? "checkmark" : "xmark")
-                            .font(.system(size: 5, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-                    .offset(x: 4, y: 2)
-            }
         }
     }
 }
@@ -42,18 +18,78 @@ struct MindBaseMenubarApp: App {
 class AppState: ObservableObject {
     @Published var autoCollectionEnabled = true  // デフォルトON
     @Published var apiHealthy = false
+    @Published var ollamaHealthy = false
     @Published var lastHealthCheck: Date?
+
+    // Model selection
+    @AppStorage("selectedModel") var selectedModel: String = AppConfig.defaultModel
+    @Published var availableModels: [String] = []
+    @Published var isLoadingModels = false
 
     private var watcher: ConversationWatcher?
 
     init() {
-        // Initialize health check
+        // Initialize health check and fetch models
         Task {
             await checkHealth()
+            await checkOllamaHealth()
+            await fetchModels()
         }
 
         // Auto-start watcher
         startWatcher()
+    }
+
+    /// Check Ollama health
+    func checkOllamaHealth() async {
+        do {
+            guard let url = URL(string: AppConfig.ollamaTagsURL) else {
+                throw URLError(.badURL)
+            }
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 5.0
+            let (_, response) = try await URLSession.shared.data(for: request)
+
+            await MainActor.run {
+                if let httpResponse = response as? HTTPURLResponse {
+                    self.ollamaHealthy = (httpResponse.statusCode == 200)
+                }
+            }
+        } catch {
+            print("[MindBase] Ollama health check failed: \(error)")
+            await MainActor.run {
+                self.ollamaHealthy = false
+            }
+        }
+    }
+
+    /// Fetch available models from Ollama
+    func fetchModels() async {
+        isLoadingModels = true
+        defer { isLoadingModels = false }
+
+        do {
+            let models = try await OllamaClient.fetchModels()
+            await MainActor.run {
+                self.availableModels = models
+                // If selected model is not available, use first available or default
+                if !models.contains(selectedModel) && !models.isEmpty {
+                    self.selectedModel = models.first ?? AppConfig.defaultModel
+                }
+            }
+        } catch {
+            print("[MindBase] Failed to fetch models: \(error)")
+            // Keep default model on failure
+            await MainActor.run {
+                if self.availableModels.isEmpty {
+                    self.availableModels = [AppConfig.defaultModel]
+                }
+            }
+        }
+    }
+
+    func selectModel(_ model: String) {
+        selectedModel = model
     }
 
     func toggleAutoCollection() {
@@ -127,7 +163,9 @@ class AppState: ObservableObject {
 
     func checkHealth() async {
         do {
-            let url = URL(string: "http://localhost:18002/health")!
+            guard let url = URL(string: AppConfig.mindbaseHealthURL) else {
+                throw URLError(.badURL)
+            }
             let (data, _) = try await URLSession.shared.data(from: url)
             let health = try JSONDecoder().decode(HealthStatus.self, from: data)
 
@@ -147,11 +185,73 @@ class AppState: ObservableObject {
 // MARK: - Menu View
 struct MindBaseMenu: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        // Status header (disabled, just for display)
-        Text("MindBase — \(appState.apiHealthy ? "✓ Healthy" : "⏳ Checking...")")
+        // Status header
+        Text("MindBase — \(appState.apiHealthy ? "✓ API" : "⏳ API") | \(appState.ollamaHealthy ? "✓ Ollama" : "⏳ Ollama")")
+
+        Divider()
+
+        // Chat Options submenu
+        Menu {
+            Button {
+                openOpenWebUI()
+            } label: {
+                Label("Open WebUI", systemImage: "globe")
+            }
+
+            Button {
+                launchOllamaApp()
+            } label: {
+                Label("Ollama App", systemImage: "app")
+            }
+
+            Divider()
+
+            Button {
+                launchBuiltInChat()
+            } label: {
+                Label("MindBase Chat", systemImage: "message.fill")
+            }
+        } label: {
+            Label("Open Chat", systemImage: "message.fill")
+        }
+
+        Divider()
+
+        // Model Selection submenu
+        Menu {
+            if appState.isLoadingModels {
+                Text("Loading models...")
+            } else if appState.availableModels.isEmpty {
+                Text("No models available")
+                Button("Refresh") {
+                    Task { await appState.fetchModels() }
+                }
+            } else {
+                ForEach(appState.availableModels, id: \.self) { model in
+                    Button {
+                        appState.selectModel(model)
+                    } label: {
+                        HStack {
+                            Text(model)
+                            if model == appState.selectedModel {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+                Divider()
+                Button {
+                    Task { await appState.fetchModels() }
+                } label: {
+                    Label("Refresh Models", systemImage: "arrow.clockwise")
+                }
+            }
+        } label: {
+            Label("Model: \(appState.selectedModel)", systemImage: "cpu")
+        }
 
         Divider()
 
@@ -167,30 +267,21 @@ struct MindBaseMenu: View {
 
         // Quick Actions
         Button {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "chat")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                if let window = NSApp.windows.first(where: { $0.title == "MindBase Chat" }) {
-                    window.makeKeyAndOrderFront(nil)
-                    window.orderFrontRegardless()
-                }
+            Task {
+                await appState.checkHealth()
+                await appState.checkOllamaHealth()
+                await appState.fetchModels()
             }
         } label: {
-            Label("Open Chat", systemImage: "message.fill")
+            Label("Refresh Status", systemImage: "arrow.clockwise")
         }
 
         Button {
-            Task { await appState.checkHealth() }
-        } label: {
-            Label("Refresh Health", systemImage: "arrow.clockwise")
-        }
-
-        Button {
-            if let url = URL(string: "http://localhost:18002/docs") {
+            if let url = URL(string: AppConfig.mindbaseDocsURL) {
                 NSWorkspace.shared.open(url)
             }
         } label: {
-            Label("Open Dashboard", systemImage: "chart.bar")
+            Label("Open API Docs", systemImage: "doc.text")
         }
 
         Divider()
@@ -201,6 +292,77 @@ struct MindBaseMenu: View {
             Label("Quit", systemImage: "power")
         }
         .keyboardShortcut("q")
+    }
+
+    // MARK: - Chat Launch Methods
+
+    /// Open WebUI (default: http://localhost:3000)
+    private func openOpenWebUI() {
+        let openWebUIURL = ProcessInfo.processInfo.environment["OPEN_WEBUI_URL"] ?? "http://localhost:3000"
+        if let url = URL(string: openWebUIURL) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Launch Ollama native app
+    private func launchOllamaApp() {
+        let possiblePaths = [
+            "/Applications/Ollama.app",
+            NSHomeDirectory() + "/Applications/Ollama.app"
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path) {
+                NSWorkspace.shared.openApplication(
+                    at: URL(fileURLWithPath: path),
+                    configuration: .init()
+                ) { _, error in
+                    if let error = error {
+                        print("[MindBase] Failed to launch Ollama app: \(error)")
+                    }
+                }
+                return
+            }
+        }
+        // Fallback: open Ollama website
+        if let url = URL(string: "https://ollama.com/download") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Launch built-in MindBase Chat
+    private func launchBuiltInChat() {
+        // Try debug build first (development), then release paths
+        let possiblePaths = [
+            // Debug build (development)
+            NSHomeDirectory() + "/github/mindbase/apps/menubar-swift/.build/debug/MindBaseChat",
+            // App bundle paths
+            NSHomeDirectory() + "/Applications/MindBase Chat.app",
+            "/Applications/MindBase Chat.app",
+            Bundle.main.bundlePath.replacingOccurrences(of: "MindBase.app", with: "MindBase Chat.app")
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path) {
+                if path.hasSuffix(".app") {
+                    NSWorkspace.shared.openApplication(
+                        at: URL(fileURLWithPath: path),
+                        configuration: .init()
+                    ) { _, error in
+                        if let error = error {
+                            print("[MindBase] Failed to launch chat: \(error)")
+                        }
+                    }
+                } else {
+                    // Launch executable directly
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: path)
+                    try? process.run()
+                }
+                return
+            }
+        }
+        print("[MindBase] Chat app not found")
     }
 }
 

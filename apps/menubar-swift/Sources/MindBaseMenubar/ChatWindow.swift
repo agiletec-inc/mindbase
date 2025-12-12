@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: - Chat Window
 struct ChatWindow: View {
+    @EnvironmentObject var appState: AppState
     @StateObject private var chatState = ChatState()
     @State private var inputText = ""
 
@@ -15,7 +16,7 @@ struct ChatWindow: View {
                 Text("MindBase Chat")
                     .font(.system(size: 13, weight: .medium))
                 Spacer()
-                Text("qwen2.5:3b")
+                Text(appState.selectedModel)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -78,7 +79,7 @@ struct ChatWindow: View {
         inputText = ""
 
         Task {
-            await chatState.sendMessage(userMessage)
+            await chatState.sendMessage(userMessage, model: appState.selectedModel)
         }
     }
 }
@@ -128,21 +129,26 @@ class ChatState: ObservableObject {
     private let ollamaClient = OllamaClient()
     private let mindbaseClient = MindBaseClient()
 
-    func sendMessage(_ content: String) async {
+    func sendMessage(_ content: String, model: String) async {
         // Add user message
         let userMessage = ChatMessage(role: .user, content: content)
         messages.append(userMessage)
         isProcessing = true
 
+        // 1. Search relevant context from MindBase (optional - continue on failure)
+        var contexts: [String] = []
         do {
-            // 1. Search relevant context from MindBase
-            let contexts = try await mindbaseClient.searchContext(query: content)
+            contexts = try await mindbaseClient.searchContext(query: content)
+        } catch {
+            print("[MindBase] Context search failed (continuing without context): \(error)")
+        }
 
-            // 2. Build prompt with context
-            let prompt = buildPrompt(userQuestion: content, contexts: contexts)
+        // 2. Build prompt with context
+        let prompt = buildPrompt(userQuestion: content, contexts: contexts)
 
-            // 3. Get response from Ollama
-            let response = try await ollamaClient.chat(prompt: prompt, model: "qwen2.5:3b")
+        // 3. Get response from Ollama
+        do {
+            let response = try await ollamaClient.chat(prompt: prompt, model: model)
 
             // 4. Add assistant message
             let assistantMessage = ChatMessage(
@@ -152,17 +158,22 @@ class ChatState: ObservableObject {
             )
             messages.append(assistantMessage)
 
-            // 5. Save conversation to MindBase
-            try await mindbaseClient.saveConversation(
-                userMessage: content,
-                assistantMessage: response,
-                contexts: contexts
-            )
+            // 5. Save conversation to MindBase (optional - log on failure)
+            do {
+                try await mindbaseClient.saveConversation(
+                    userMessage: content,
+                    assistantMessage: response,
+                    model: model,
+                    contexts: contexts
+                )
+            } catch {
+                print("[MindBase] Conversation save failed (non-critical): \(error)")
+            }
 
         } catch {
             let errorMessage = ChatMessage(
                 role: .assistant,
-                content: "Error: \(error.localizedDescription)"
+                content: "Ollama error: \(error.localizedDescription)\n\nMake sure Ollama is running and the model '\(model)' is available.\nRun: ollama pull \(model)"
             )
             messages.append(errorMessage)
         }
@@ -182,7 +193,11 @@ class ChatState: ObservableObject {
         }
 
         prompt += "質問: \(userQuestion)\n\n"
-        prompt += "上記の過去会話を参考に、質問に答えてください。"
+        if contexts.isEmpty {
+            prompt += "質問に答えてください。"
+        } else {
+            prompt += "上記の過去会話を参考に、質問に答えてください。"
+        }
 
         return prompt
     }
@@ -203,11 +218,18 @@ struct ChatMessage: Identifiable {
 
 // MARK: - Ollama Client
 struct OllamaClient {
+    /// Timeout for Ollama requests (30 seconds)
+    private let timeoutInterval: TimeInterval = 30.0
+
     func chat(prompt: String, model: String) async throws -> String {
-        let url = URL(string: "http://localhost:11434/api/generate")!
+        guard let url = URL(string: AppConfig.ollamaGenerateURL) else {
+            throw OllamaError.invalidURL
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = timeoutInterval
 
         let body: [String: Any] = [
             "model": model,
@@ -216,23 +238,78 @@ struct OllamaClient {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OllamaError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw OllamaError.httpError(statusCode: httpResponse.statusCode)
+        }
+
+        let ollamaResponse = try JSONDecoder().decode(OllamaResponse.self, from: data)
+        return ollamaResponse.response
+    }
+
+    /// Fetch available models from Ollama
+    static func fetchModels() async throws -> [String] {
+        guard let url = URL(string: AppConfig.ollamaTagsURL) else {
+            throw OllamaError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0
+
         let (data, _) = try await URLSession.shared.data(for: request)
-        let response = try JSONDecoder().decode(OllamaResponse.self, from: data)
-        return response.response
+        let tagsResponse = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
+        return tagsResponse.models.map { $0.name }
     }
 
     struct OllamaResponse: Codable {
         let response: String
     }
+
+    struct OllamaTagsResponse: Codable {
+        let models: [OllamaModel]
+    }
+
+    struct OllamaModel: Codable {
+        let name: String
+    }
+
+    enum OllamaError: LocalizedError {
+        case invalidURL
+        case invalidResponse
+        case httpError(statusCode: Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidURL:
+                return "Invalid Ollama URL"
+            case .invalidResponse:
+                return "Invalid response from Ollama"
+            case .httpError(let statusCode):
+                return "Ollama returned HTTP \(statusCode)"
+            }
+        }
+    }
 }
 
 // MARK: - MindBase Client
 struct MindBaseClient {
+    /// Timeout for MindBase API requests (10 seconds)
+    private let timeoutInterval: TimeInterval = 10.0
+
     func searchContext(query: String, limit: Int = 5) async throws -> [String] {
-        let url = URL(string: "http://localhost:18002/conversations/search")!
+        guard let url = URL(string: AppConfig.mindbaseSearchURL) else {
+            throw MindBaseError.invalidURL
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = timeoutInterval
 
         let body: [String: Any] = [
             "query": query,
@@ -241,19 +318,29 @@ struct MindBaseClient {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let response = try JSONDecoder().decode(SearchResponse.self, from: data)
+        let (data, response) = try await URLSession.shared.data(for: request)
 
-        return response.results.map { result in
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw MindBaseError.searchFailed
+        }
+
+        let searchResponse = try JSONDecoder().decode(SearchResponse.self, from: data)
+
+        return searchResponse.results.map { result in
             "[\(result.source)] \(result.title) - \(result.content_preview)"
         }
     }
 
-    func saveConversation(userMessage: String, assistantMessage: String, contexts: [String]) async throws {
-        let url = URL(string: "http://localhost:18002/conversations/store")!
+    func saveConversation(userMessage: String, assistantMessage: String, model: String, contexts: [String]) async throws {
+        guard let url = URL(string: AppConfig.mindbaseStoreURL) else {
+            throw MindBaseError.invalidURL
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = timeoutInterval
 
         let body: [String: Any] = [
             "source": "mindbase-chat",
@@ -263,13 +350,18 @@ struct MindBaseClient {
                 "assistant": assistantMessage
             ],
             "metadata": [
-                "model": "qwen2.5:3b",
+                "model": model,
                 "contexts_used": contexts.count
             ]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        _ = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
+            throw MindBaseError.saveFailed
+        }
     }
 
     struct SearchResponse: Codable {
@@ -280,5 +372,22 @@ struct MindBaseClient {
         let source: String
         let title: String
         let content_preview: String
+    }
+
+    enum MindBaseError: LocalizedError {
+        case invalidURL
+        case searchFailed
+        case saveFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidURL:
+                return "Invalid MindBase API URL"
+            case .searchFailed:
+                return "Failed to search conversations"
+            case .saveFailed:
+                return "Failed to save conversation"
+            }
+        }
     }
 }
