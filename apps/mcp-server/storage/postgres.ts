@@ -14,6 +14,7 @@ import type {
   HybridSearchOptions,
   SearchResult,
 } from './interface.js';
+import { ensureSchema } from './schema.js';
 
 export class PostgresStorageBackend implements StorageBackend {
   private pool: Pool;
@@ -24,6 +25,14 @@ export class PostgresStorageBackend implements StorageBackend {
     this.pool = new Pool({ connectionString });
     this.ollamaUrl = ollamaUrl;
     this.embeddingModel = embeddingModel;
+  }
+
+  /**
+   * Initialize database schema if not already done
+   * Call this before using the storage backend
+   */
+  async initialize(): Promise<void> {
+    await ensureSchema(this.pool);
   }
 
   /**

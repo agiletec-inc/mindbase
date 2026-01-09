@@ -523,6 +523,15 @@ class MindBaseMCPServer {
    * Start the MCP server
    */
   async run() {
+    // Initialize database schema (auto-migration for standalone Docker deployment)
+    try {
+      await this.storage.initialize();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[MindBase MCP] Failed to initialize database schema:', errorMessage);
+      console.error('[MindBase MCP] Server will continue but database operations may fail');
+    }
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('[MindBase MCP] Server running on stdio');
