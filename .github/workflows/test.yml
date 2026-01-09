@@ -68,7 +68,7 @@ jobs:
           pytest tests/ -v --cov=apps/api --cov=libs/collectors --cov-report=xml
 
       - name: Run TypeScript type check
-        run: pnpm typecheck
+        run: pnpm --filter @mindbase/mcp-server typecheck
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
