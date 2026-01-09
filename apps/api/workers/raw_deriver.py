@@ -13,7 +13,9 @@ from app.config import get_settings
 from app.models.conversation import RawConversation
 from app.services.deriver import process_raw_conversation
 
-logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 

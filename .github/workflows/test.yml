@@ -50,6 +50,11 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov
 
+      - name: Create compatibility symlinks
+        run: |
+          # Symlink for monorepo migration compatibility
+          ln -sf apps/api app
+
       - name: Install TypeScript dependencies
         run: pnpm install
 
@@ -86,6 +91,10 @@ jobs:
       - name: Install linters
         run: |
           pip install black ruff mypy
+
+      - name: Create compatibility symlinks
+        run: |
+          ln -sf apps/api app
 
       - name: Run Black
         run: black --check apps/api/ libs/collectors/

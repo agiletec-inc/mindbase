@@ -14,7 +14,9 @@ async def get_settings() -> AppSettings:
     try:
         return AppSettings(**data)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Invalid settings file: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Invalid settings file: {exc}"
+        ) from exc
 
 
 @router.put("", response_model=AppSettings)

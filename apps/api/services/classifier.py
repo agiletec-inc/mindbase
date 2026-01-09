@@ -6,14 +6,44 @@ from typing import Dict, Iterable, List, Optional
 
 
 TOPIC_KEYWORDS: Dict[str, List[str]] = {
-    "Docker-First Development": ["docker", "docker-compose", "container", "workspace", "volume"],
-    "Turborepo Monorepo": ["turborepo", "pnpm", "monorepo", "workspace", "package.json"],
+    "Docker-First Development": [
+        "docker",
+        "docker-compose",
+        "container",
+        "workspace",
+        "volume",
+    ],
+    "Turborepo Monorepo": [
+        "turborepo",
+        "pnpm",
+        "monorepo",
+        "workspace",
+        "package.json",
+    ],
     "Supabase Self-Host": ["supabase", "realtime", "edge function", "kong", "auth"],
-    "Multi-Tenancy": ["multi-tenant", "tenant", "organization_id", "row level security", "rls"],
-    "Testing Strategy": ["unit test", "integration test", "playwright", "vitest", "coverage"],
+    "Multi-Tenancy": [
+        "multi-tenant",
+        "tenant",
+        "organization_id",
+        "row level security",
+        "rls",
+    ],
+    "Testing Strategy": [
+        "unit test",
+        "integration test",
+        "playwright",
+        "vitest",
+        "coverage",
+    ],
     "SuperClaude Framework": ["superclaude", "pm agent", "mcp", "skill", "persona"],
     "AlmaLinux HomeServer": ["almalinux", "restic", "tdarr", "nas", "samba"],
-    "Performance Optimization": ["performance", "optimization", "cache", "latency", "profiling"],
+    "Performance Optimization": [
+        "performance",
+        "optimization",
+        "cache",
+        "latency",
+        "profiling",
+    ],
     "API Design": ["api", "endpoint", "openapi", "fastapi", "rest"],
     "Security": ["authentication", "authorization", "jwt", "encryption", "secret"],
 }
@@ -26,7 +56,14 @@ PROJECT_KEYWORDS: Dict[str, Iterable[str]] = {
 }
 
 # Keys in metadata/content that may contain project identifiers
-PROJECT_HINT_KEYS = ("project", "workspace", "project_path", "repo", "repository", "slug")
+PROJECT_HINT_KEYS = (
+    "project",
+    "workspace",
+    "project_path",
+    "repo",
+    "repository",
+    "slug",
+)
 
 
 def _normalise_text(text: Optional[str]) -> str:

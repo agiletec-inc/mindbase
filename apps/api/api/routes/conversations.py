@@ -26,8 +26,7 @@ settings = get_settings()
 
 @router.post("/store", response_model=ConversationResponse | ConversationQueuedResponse)
 async def store_conversation(
-    conversation: ConversationCreate,
-    db: AsyncSession = Depends(get_db)
+    conversation: ConversationCreate, db: AsyncSession = Depends(get_db)
 ):
     """
     Store a conversation with automatic embedding generation
@@ -67,13 +66,14 @@ async def store_conversation(
 
     except Exception as exc:  # pragma: no cover - surfaced via HTTP response
         logger.exception("Failed to store conversation")
-        raise HTTPException(status_code=500, detail=f"Failed to store conversation: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Failed to store conversation: {exc}"
+        ) from exc
 
 
 @router.post("/search", response_model=list[SearchResult])
 async def search_conversations_endpoint(
-    query: SearchQuery,
-    db: AsyncSession = Depends(get_db)
+    query: SearchQuery, db: AsyncSession = Depends(get_db)
 ):
     """
     Semantic search across conversations
@@ -105,10 +105,16 @@ async def search_conversations_endpoint(
             if "messages" in row.content:
                 messages = row.content["messages"]
                 first_message = messages[0].get("content", "") if messages else ""
-                preview = first_message[:200] + "..." if len(first_message) > 200 else first_message
+                preview = (
+                    first_message[:200] + "..."
+                    if len(first_message) > 200
+                    else first_message
+                )
             else:
                 content_str = str(row.content)
-                preview = content_str[:200] + "..." if len(content_str) > 200 else content_str
+                preview = (
+                    content_str[:200] + "..." if len(content_str) > 200 else content_str
+                )
 
             search_results.append(
                 SearchResult(
@@ -121,7 +127,7 @@ async def search_conversations_endpoint(
                     workspace_path=row.workspace_path,
                     raw_id=row.raw_id,
                     created_at=row.created_at,
-                    content_preview=preview
+                    content_preview=preview,
                 )
             )
 

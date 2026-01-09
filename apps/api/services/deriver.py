@@ -19,7 +19,9 @@ def _extract_text_from_content(content: dict) -> Tuple[str, int, str | None]:
     """Flatten conversation content for embedding generation."""
     if "messages" in content:
         messages = content["messages"]
-        flattened = [str(msg.get("content", "")) for msg in messages if "content" in msg]
+        flattened = [
+            str(msg.get("content", "")) for msg in messages if "content" in msg
+        ]
         joined = " ".join(flattened)
         raw_content = "\n\n".join(flattened)
         return joined, len(flattened), raw_content
@@ -46,7 +48,9 @@ async def process_raw_conversation(
         metadata["workspace_path"] = workspace_path
         metadata.setdefault("workspace", workspace_path)
 
-    text_content, message_count, raw_content = _extract_text_from_content(payload.content)
+    text_content, message_count, raw_content = _extract_text_from_content(
+        payload.content
+    )
     embedding = await ollama_client.embed(text_content or " ")
 
     project = infer_project(

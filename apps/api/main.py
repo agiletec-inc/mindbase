@@ -45,5 +45,5 @@ async def root():
         "message": "MindBase API - AI Conversation Knowledge Management",
         "version": settings.API_VERSION,
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }

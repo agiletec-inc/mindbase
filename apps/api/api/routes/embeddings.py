@@ -19,6 +19,7 @@ settings = get_settings()
 
 class ModelInfo(BaseModel):
     """Embedding model information"""
+
     name: str
     size: str
     dimensions: int
@@ -30,6 +31,7 @@ class ModelInfo(BaseModel):
 
 class ModelListResponse(BaseModel):
     """Response for model list endpoint"""
+
     current: str
     available: list[ModelInfo]
     hardware: dict
@@ -38,12 +40,14 @@ class ModelListResponse(BaseModel):
 
 class ModelInstallRequest(BaseModel):
     """Request body for model installation"""
+
     model: str
     quantization: str | None = None
 
 
 class ModelInstallResponse(BaseModel):
     """Response for model installation"""
+
     status: Literal["installing", "success", "error"]
     progress: str | None = None
     job_id: str | None = None
@@ -52,11 +56,13 @@ class ModelInstallResponse(BaseModel):
 
 class ModelSwitchRequest(BaseModel):
     """Request body for switching active model"""
+
     model: str
 
 
 class ModelSwitchResponse(BaseModel):
     """Response for model switch"""
+
     status: Literal["success", "error"]
     previous: str
     current: str
@@ -66,6 +72,7 @@ class ModelSwitchResponse(BaseModel):
 
 class SystemSpecsResponse(BaseModel):
     """System hardware specifications"""
+
     platform: str
     cpu_cores: int
     ram_total: str
@@ -79,11 +86,13 @@ class SystemSpecsResponse(BaseModel):
 
 class EmbeddingGenerateRequest(BaseModel):
     """Request body for embedding generation"""
+
     text: str = Field(..., min_length=1, description="Text to embed")
 
 
 class EmbeddingGenerateResponse(BaseModel):
     """Response model for embedding generation"""
+
     embedding: list[float]
     dimensions: int
     model: str
@@ -182,10 +191,12 @@ def recommend_models(hardware: dict) -> list[str]:
 
     # Tier 1: High-end (16GB+ RAM)
     if ram_gb >= 16:
-        recommendations.extend([
-            "qwen3-embedding:8b",  # Best overall
-            "bge-m3",              # Long context
-        ])
+        recommendations.extend(
+            [
+                "qwen3-embedding:8b",  # Best overall
+                "bge-m3",  # Long context
+            ]
+        )
 
     # Tier 2: Mid-range (8-16GB RAM)
     if ram_gb >= 8:
@@ -222,14 +233,16 @@ async def list_models():
         available = []
         for model_name, info in MODEL_CATALOG.items():
             is_installed = model_name in installed_models
-            available.append(ModelInfo(
-                name=model_name,
-                size=info["size"],
-                dimensions=info["dimensions"],
-                mteb_score=info["mteb_score"],
-                ram_required=info["ram_required"],
-                status="installed" if is_installed else "not_installed",
-            ))
+            available.append(
+                ModelInfo(
+                    name=model_name,
+                    size=info["size"],
+                    dimensions=info["dimensions"],
+                    mteb_score=info["mteb_score"],
+                    ram_required=info["ram_required"],
+                    status="installed" if is_installed else "not_installed",
+                )
+            )
 
         # Get recommendations
         recommended_model_names = recommend_models(hardware)
@@ -386,7 +399,9 @@ async def delete_model(model_name: str):
                 "message": f"Model {model_name} deleted successfully",
             }
         else:
-            raise HTTPException(status_code=404, detail=f"Model not found: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"Model not found: {model_name}"
+            )
 
     except HTTPException:
         raise
@@ -432,7 +447,9 @@ async def get_system_specs():
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get system specs: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get system specs: {str(e)}"
+        )
 
 
 @router.post("/generate", response_model=EmbeddingGenerateResponse)
@@ -446,4 +463,6 @@ async def generate_embedding(request: EmbeddingGenerateRequest):
             model=ollama_client.model,
         )
     except Exception as e:  # pragma: no cover - surfaced via API response
-        raise HTTPException(status_code=500, detail=f"Failed to generate embedding: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate embedding: {str(e)}"
+        )

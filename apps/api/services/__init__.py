@@ -1,2 +1,1 @@
 """MindBase service utilities."""
-

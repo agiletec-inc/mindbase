@@ -84,7 +84,9 @@ class OllamaClient:
         """Compatibility wrapper for integration tests."""
         return await self.embed(text)
 
-    async def generate_batch_embeddings(self, texts: Iterable[str]) -> List[List[float]]:
+    async def generate_batch_embeddings(
+        self, texts: Iterable[str]
+    ) -> List[List[float]]:
         """Compatibility wrapper for integration tests."""
         return await self.embed_batch(texts)
 

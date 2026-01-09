@@ -34,7 +34,9 @@ class RawConversation(Base):
     payload = Column(JSONB, nullable=False)
     raw_metadata = Column("metadata", JSONB, nullable=False, default=dict)
     captured_at = Column(DateTime(timezone=True))
-    inserted_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    inserted_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
     processed_at = Column(DateTime(timezone=True))
     processing_error = Column(Text)
     retry_count = Column(Integer, default=0)
@@ -55,7 +57,9 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    raw_id = Column(UUID(as_uuid=True), ForeignKey("raw_conversations.id", ondelete="SET NULL"))
+    raw_id = Column(
+        UUID(as_uuid=True), ForeignKey("raw_conversations.id", ondelete="SET NULL")
+    )
 
     # Source information
     source = Column(String, nullable=False)
@@ -94,7 +98,9 @@ class Conversation(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("source", "source_conversation_id", name="unique_source_conversation"),
+        UniqueConstraint(
+            "source", "source_conversation_id", name="unique_source_conversation"
+        ),
     )
 
     def __repr__(self) -> str:  # pragma: no cover - repr helper
