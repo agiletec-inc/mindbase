@@ -330,10 +330,10 @@ class CursorCollector(BaseCollector):
                             conv = self._parse_json_conversation(data)
                             if conv:
                                 conversations.append(conv)
-                        except:
+                        except Exception:
                             pass
 
-            except:
+            except Exception:
                 pass
 
             conn.close()
@@ -405,7 +405,6 @@ class CursorCollector(BaseCollector):
                         lines = f.readlines()
 
                     # Parse log entries for AI interactions
-                    current_conversation = None
                     current_messages = []
 
                     for line in lines:
@@ -473,7 +472,7 @@ class CursorCollector(BaseCollector):
                 if isinstance(msg_data, str):
                     try:
                         msg_data = json.loads(msg_data)
-                    except:
+                    except Exception:
                         pass
 
                 if isinstance(msg_data, list):

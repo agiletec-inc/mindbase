@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, List
+from typing import Iterable, List
 
 import httpx
 

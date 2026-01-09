@@ -298,10 +298,10 @@ class ChatGPTCollector(BaseCollector):
                                 conv = self._parse_json_conversation(data)
                                 if conv:
                                     conversations.append(conv)
-                            except:
+                            except Exception:
                                 pass
 
-                except:
+                except Exception:
                     pass
 
             conn.close()
@@ -436,7 +436,7 @@ class ChatGPTCollector(BaseCollector):
                 if isinstance(msg_data, str):
                     try:
                         msg_data = json.loads(msg_data)
-                    except:
+                    except Exception:
                         pass
 
                 if isinstance(msg_data, list):
@@ -473,7 +473,7 @@ class ChatGPTCollector(BaseCollector):
                 if isinstance(content, str):
                     try:
                         content = json.loads(content)
-                    except:
+                    except Exception:
                         pass
 
                 if isinstance(content, dict):
@@ -718,7 +718,7 @@ class ChatGPTCollector(BaseCollector):
                     if conv:
                         conversations.append(conv)
 
-            except:
+            except Exception:
                 pass
 
         return conversations

@@ -4,14 +4,13 @@ Base Collector Class
 Foundation for all AI conversation collectors with precise data structures
 """
 
-import os
 import json
 import hashlib
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict, field
 
 logger = logging.getLogger(__name__)
@@ -145,7 +144,7 @@ class BaseCollector(ABC):
     def validate_conversation(self, conversation: Conversation) -> bool:
         """Validate conversation data integrity"""
         if not conversation.id:
-            logger.warning(f"Conversation missing ID")
+            logger.warning("Conversation missing ID")
             return False
 
         if not conversation.messages:
@@ -211,7 +210,7 @@ class BaseCollector(ABC):
                 if not dt.tzinfo:
                     dt = dt.replace(tzinfo=timezone.utc)
                 return dt
-            except:
+            except Exception:
                 pass
 
         # Default to now if parsing fails

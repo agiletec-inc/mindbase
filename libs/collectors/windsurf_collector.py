@@ -196,7 +196,7 @@ class WindsurfCollector(BaseCollector):
                             conv = self._parse_json_conversation(data)
                             if conv:
                                 conversations.append(conv)
-                        except:
+                        except Exception:
                             pass
 
             except Exception as e:

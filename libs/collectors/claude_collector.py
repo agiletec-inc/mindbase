@@ -12,7 +12,6 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
-import struct
 
 from base_collector import BaseCollector, Conversation, Message
 
@@ -243,7 +242,7 @@ class ClaudeDesktopCollector(BaseCollector):
                                 conv = self._parse_json_conversation(data)
                                 if conv:
                                     conversations.append(conv)
-                            except:
+                            except Exception:
                                 pass
 
                 except Exception as e:
@@ -333,7 +332,7 @@ class ClaudeDesktopCollector(BaseCollector):
                     if conv:
                         conversations.append(conv)
 
-            except:
+            except Exception:
                 pass
 
         return conversations
@@ -374,7 +373,7 @@ class ClaudeDesktopCollector(BaseCollector):
                             if parsed_msg:
                                 messages.append(parsed_msg)
 
-                    except:
+                    except Exception:
                         pass
 
             if not messages:
