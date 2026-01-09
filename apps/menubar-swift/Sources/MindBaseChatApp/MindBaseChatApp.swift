@@ -8,7 +8,7 @@ struct MindBaseChatApp: App {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(store: conversationStore) {
                     createNewChat()
@@ -63,6 +63,10 @@ struct MindBaseChatApp: App {
                 }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
             }
+        }
+
+        Settings {
+            SettingsView(viewModel: viewModel)
         }
     }
 

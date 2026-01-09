@@ -25,7 +25,8 @@ public actor OllamaClient {
         }
 
         let result = try JSONDecoder().decode(OllamaModelsResponse.self, from: data)
-        return result.models
+        // Filter out embedding models (they can't be used for chat)
+        return result.models.filter { !$0.isEmbeddingModel }
     }
 
     public func pullModel(_ name: String) async throws -> AsyncThrowingStream<OllamaPullProgress, Error> {
@@ -163,6 +164,12 @@ public struct OllamaModel: Codable, Sendable {
         guard let size = size else { return "" }
         let gb = Double(size) / 1_000_000_000
         return String(format: "%.1fGB", gb)
+    }
+
+    public var isEmbeddingModel: Bool {
+        let embeddingKeywords = ["embed", "embedding", "nomic-embed"]
+        let lowerName = name.lowercased()
+        return embeddingKeywords.contains { lowerName.contains($0) }
     }
 }
 

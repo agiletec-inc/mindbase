@@ -6,6 +6,29 @@
 
 ---
 
+## AIRIS Ecosystem Role
+
+| Repository | Responsibility | Image |
+|------------|---------------|-------|
+| `airis-mcp-gateway` | MCP routing/proxy | `ghcr.io/agiletec-inc/airis-mcp-gateway` |
+| `airis-agent` | PM logic (Confidence, Self-Check, Reflexion, PDCA) | `ghcr.io/agiletec-inc/airis-agent` |
+| **`mindbase`** | **Long-term memory storage** | `ghcr.io/agiletec-inc/mindbase` |
+| `airis-workspace` | Toolchain (monorepo management) | `ghcr.io/agiletec-inc/airis-workspace` |
+
+### What Belongs Here
+- Conversation storage with semantic search
+- Session management
+- Memory/knowledge base
+- Reflexion pattern storage (lessons learned from airis-agent)
+- Graph relationships (entities, relations)
+
+### What Does NOT Belong Here
+- MCP transport → `airis-mcp-gateway`
+- Intent detection → `airis-agent`
+- PDCA orchestration → `airis-agent`
+
+---
+
 ## Vision & Purpose
 
 **MindBase = LLMの外部記憶装置**

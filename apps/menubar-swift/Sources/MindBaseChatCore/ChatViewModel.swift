@@ -37,8 +37,14 @@ public final class ChatViewModel: ObservableObject {
 
         do {
             availableModels = try await ollama.listModels()
-            if !availableModels.contains(where: { $0.name == selectedModel || $0.displayName == selectedModel }) {
-                if let first = availableModels.first {
+
+            // Check if current model is valid (not an embedding model and exists)
+            let currentModelValid = availableModels.contains { $0.name == selectedModel }
+            if !currentModelValid {
+                // Prefer qwen2.5:3b, otherwise use first available
+                if let qwen = availableModels.first(where: { $0.name.contains("qwen2.5") }) {
+                    selectedModel = qwen.name
+                } else if let first = availableModels.first {
                     selectedModel = first.name
                 }
             }
@@ -156,6 +162,10 @@ public final class ChatViewModel: ObservableObject {
         streamingText = ""
         isStreaming = false
         error = nil
+    }
+
+    public func deleteMessage(_ id: UUID) {
+        messages.removeAll { $0.id == id }
     }
 
     // MARK: - RAG

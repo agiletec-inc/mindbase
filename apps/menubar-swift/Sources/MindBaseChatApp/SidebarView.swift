@@ -1,67 +1,127 @@
 import SwiftUI
 import MindBaseChatCore
+import UniformTypeIdentifiers
 
+// ChatGPT-style dark sidebar
 struct SidebarView: View {
     @ObservedObject var store: ConversationStore
     let onNewChat: () -> Void
 
+    @State private var searchText = ""
+    @State private var editingConversationId: UUID?
+    @State private var editingTitle = ""
+    @State private var hoveredConversationId: UUID?
+
+    private let sidebarBackground = Color(red: 0.1, green: 0.1, blue: 0.1)
+    private let itemHoverBackground = Color(red: 0.15, green: 0.15, blue: 0.15)
+    private let itemSelectedBackground = Color(red: 0.2, green: 0.2, blue: 0.2)
+
     var body: some View {
         VStack(spacing: 0) {
-            // Header with new chat button
-            HStack {
-                Text("Chats")
-                    .font(.system(size: 13, weight: .semibold))
-
-                Spacer()
-
-                Button(action: onNewChat) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 12))
+            // New Chat Button (ChatGPT style)
+            Button(action: onNewChat) {
+                HStack {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("New chat")
+                        .font(.system(size: 14))
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-                .help("New Chat (Cmd+N)")
+                .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
 
-            Divider()
+            // Search (subtle)
+            if !store.conversations.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.4))
+
+                    TextField("Search", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.9))
+
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(6)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
+            }
 
             // Conversation list
-            if store.conversations.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 24))
-                        .foregroundColor(.secondary)
-                    Text("No conversations")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-            } else {
-                List(selection: $store.selectedConversationId) {
+            ScrollView {
+                LazyVStack(spacing: 2) {
                     ForEach(groupedConversations, id: \.key) { group in
-                        Section(header: Text(group.key).font(.system(size: 10, weight: .medium))) {
-                            ForEach(group.conversations) { conversation in
-                                ConversationRow(conversation: conversation, isSelected: store.selectedConversationId == conversation.id)
-                                    .tag(conversation.id)
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            store.deleteConversation(conversation.id)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
+                        // Date header
+                        Text(group.key)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.4))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .padding(.bottom, 4)
+
+                        ForEach(group.conversations) { conversation in
+                            ConversationRowView(
+                                conversation: conversation,
+                                isSelected: store.selectedConversationId == conversation.id,
+                                isHovered: hoveredConversationId == conversation.id,
+                                isEditing: editingConversationId == conversation.id,
+                                editingTitle: $editingTitle,
+                                onSelect: { store.selectConversation(conversation.id) },
+                                onCommitRename: { commitRename(conversation.id) },
+                                onStartRename: { startRename(conversation) },
+                                onDelete: { store.deleteConversation(conversation.id) },
+                                onExport: { exportConversation(conversation) }
+                            )
+                            .onHover { isHovered in
+                                hoveredConversationId = isHovered ? conversation.id : nil
                             }
                         }
                     }
                 }
-                .listStyle(.sidebar)
+                .padding(.bottom, 12)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
+        .background(sidebarBackground)
+    }
+
+    // Filter conversations by search text
+    private var filteredConversations: [Conversation] {
+        if searchText.isEmpty {
+            return store.conversations
+        }
+        let query = searchText.lowercased()
+        return store.conversations.filter { conversation in
+            conversation.title.lowercased().contains(query) ||
+            conversation.messages.contains { message in
+                message.content.lowercased().contains(query)
             }
         }
-        .frame(minWidth: 180, idealWidth: 220, maxWidth: 280)
     }
 
     // Group conversations by date
@@ -75,7 +135,7 @@ struct SidebarView: View {
         var thisMonth: [Conversation] = []
         var older: [Conversation] = []
 
-        for conversation in store.conversations {
+        for conversation in filteredConversations {
             if calendar.isDateInToday(conversation.updatedAt) {
                 today.append(conversation)
             } else if calendar.isDateInYesterday(conversation.updatedAt) {
@@ -94,11 +154,45 @@ struct SidebarView: View {
         var groups: [ConversationGroup] = []
         if !today.isEmpty { groups.append(ConversationGroup(key: "Today", conversations: today)) }
         if !yesterday.isEmpty { groups.append(ConversationGroup(key: "Yesterday", conversations: yesterday)) }
-        if !thisWeek.isEmpty { groups.append(ConversationGroup(key: "This Week", conversations: thisWeek)) }
-        if !thisMonth.isEmpty { groups.append(ConversationGroup(key: "This Month", conversations: thisMonth)) }
+        if !thisWeek.isEmpty { groups.append(ConversationGroup(key: "Previous 7 Days", conversations: thisWeek)) }
+        if !thisMonth.isEmpty { groups.append(ConversationGroup(key: "Previous 30 Days", conversations: thisMonth)) }
         if !older.isEmpty { groups.append(ConversationGroup(key: "Older", conversations: older)) }
 
         return groups
+    }
+
+    private func startRename(_ conversation: Conversation) {
+        editingConversationId = conversation.id
+        editingTitle = conversation.title
+    }
+
+    private func commitRename(_ id: UUID) {
+        if !editingTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            store.renameConversation(id, title: editingTitle)
+        }
+        editingConversationId = nil
+        editingTitle = ""
+    }
+
+    private func exportConversation(_ conversation: Conversation) {
+        let markdown = generateMarkdown(for: conversation)
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.nameFieldStringValue = "\(conversation.title).md"
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                try? markdown.write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    private func generateMarkdown(for conversation: Conversation) -> String {
+        var md = "# \(conversation.title)\n\n"
+        for message in conversation.messages {
+            let role = message.role == .user ? "**You**" : "**Assistant**"
+            md += "\(role)\n\n\(message.content)\n\n---\n\n"
+        }
+        return md
     }
 }
 
@@ -108,22 +202,69 @@ struct ConversationGroup: Identifiable {
     var id: String { key }
 }
 
-struct ConversationRow: View {
+struct ConversationRowView: View {
     let conversation: Conversation
     let isSelected: Bool
+    let isHovered: Bool
+    let isEditing: Bool
+    @Binding var editingTitle: String
+    let onSelect: () -> Void
+    let onCommitRename: () -> Void
+    let onStartRename: () -> Void
+    let onDelete: () -> Void
+    let onExport: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(conversation.title)
-                .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-                .lineLimit(1)
-                .foregroundColor(isSelected ? .primary : .primary)
+        HStack(spacing: 8) {
+            Image(systemName: "bubble.left")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.5))
 
-            Text(conversation.preview)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
+            if isEditing {
+                TextField("", text: $editingTitle, onCommit: onCommitRename)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white)
+            } else {
+                Text(conversation.title)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if isHovered && !isEditing {
+                HStack(spacing: 4) {
+                    Button(action: onStartRename) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .foregroundColor(.white.opacity(0.5))
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color.white.opacity(0.1) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+        )
+        .padding(.horizontal, 6)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
+        .contextMenu {
+            Button("Rename", action: onStartRename)
+            Button("Export", action: onExport)
+            Divider()
+            Button("Delete", role: .destructive, action: onDelete)
+        }
     }
 }

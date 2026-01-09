@@ -112,6 +112,13 @@ public final class ConversationStore: ObservableObject {
         saveConversations()
     }
 
+    public func renameConversation(_ id: UUID, title: String) {
+        guard let index = conversations.firstIndex(where: { $0.id == id }) else { return }
+        conversations[index].title = title
+        conversations[index].updatedAt = Date()
+        saveConversations()
+    }
+
     // MARK: - Persistence
 
     private func saveConversations() {
