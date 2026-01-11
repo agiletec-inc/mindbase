@@ -29,14 +29,8 @@ MindBase is the **memory substrate** of the **AIRIS Suite** - providing persiste
 MindBase comes **pre-configured** with AIRIS MCP Gateway. No additional setup required.
 
 ```bash
-# Install the Gateway (includes MindBase)
-brew install agiletec-inc/tap/airis-mcp-gateway
-
-# Start the gateway
-airis-mcp-gateway up
-
-# Add to Claude Code
-claude mcp add --transport http airis-mcp-gateway http://api.gateway.localhost:9400/api/v1/mcp
+# One command installs everything
+curl -fsSL https://raw.githubusercontent.com/agiletec-inc/airis-mcp-gateway/main/scripts/quick-install.sh | bash
 ```
 
 ### Alternative: Standalone Installation
