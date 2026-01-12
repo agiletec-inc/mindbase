@@ -97,9 +97,13 @@ export class ConversationTools {
       createdBefore: args.createdBefore ? new Date(args.createdBefore) : undefined,
     };
 
-    const items = await this.storage.get(filters);
-    const total = items.length; // TODO: Get actual count from storage
-    const hasMore = items.length === (args.limit || 100);
+    // Get items and count in parallel
+    const { limit, offset, ...countFilters } = filters;
+    const [items, total] = await Promise.all([
+      this.storage.get(filters),
+      this.storage.count(countFilters),
+    ]);
+    const hasMore = (offset || 0) + items.length < total;
 
     return {
       items: items.map(this.formatItem),

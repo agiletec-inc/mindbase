@@ -7,6 +7,7 @@ Supports both Mac (M4) and Fedora server deployment
 
 import json
 import logging
+import os
 import requests
 import numpy as np
 from typing import List, Dict, Optional, Any, Tuple
@@ -23,8 +24,8 @@ logger = logging.getLogger(__name__)
 class EmbeddingConfig:
     """Configuration for Ollama embeddings"""
     model: str = "nomic-embed-text"  # 768-dimensional embeddings
-    ollama_host: str = "http://localhost:11434"
-    fedora_host: str = "http://192.168.1.100:11434"  # Fedora server as fallback
+    ollama_host: str = os.getenv("OLLAMA_URL", "http://localhost:11434")
+    fedora_host: str = os.getenv("OLLAMA_FALLBACK_URL", "http://localhost:11434")
     batch_size: int = 32
     max_retries: int = 3
     retry_delay: float = 1.0
@@ -65,16 +66,16 @@ class OllamaEmbeddings:
             response = requests.get(f"{self.config.ollama_host}/api/tags", timeout=2)
             if response.status_code == 200:
                 return self.config.ollama_host
-        except:
+        except requests.RequestException:
             pass
-        
+
         # Try Fedora server
         try:
             response = requests.get(f"{self.config.fedora_host}/api/tags", timeout=2)
             if response.status_code == 200:
                 logger.info("Using Fedora server for Ollama")
                 return self.config.fedora_host
-        except:
+        except requests.RequestException:
             pass
         
         # Default to localhost

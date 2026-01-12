@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
-from collectors.base_collector import Message
+from libs.collectors.base_collector import Message
 from app.config import Settings
 from app.database import Base
 from app.models.conversation import Conversation, RawConversation  # noqa: F401

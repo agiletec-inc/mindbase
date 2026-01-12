@@ -68,6 +68,7 @@ export interface StorageBackend {
   get(filters: QueryFilters): Promise<ConversationItem[]>;
   getById(id: string): Promise<ConversationItem | null>;
   delete(id: string): Promise<boolean>;
+  count(filters: Omit<QueryFilters, 'limit' | 'offset'>): Promise<number>;
 
   // Search operations
   search(query: string, threshold?: number): Promise<SearchResult[]>;

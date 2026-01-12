@@ -191,6 +191,56 @@ export class PostgresStorageBackend implements StorageBackend {
   }
 
   /**
+   * Count conversations matching filters
+   */
+  async count(filters: Omit<QueryFilters, 'limit' | 'offset'>): Promise<number> {
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (filters.source) {
+      conditions.push(`source = $${paramIndex++}`);
+      params.push(filters.source);
+    }
+
+    if (filters.category) {
+      conditions.push(`category = $${paramIndex++}`);
+      params.push(filters.category);
+    }
+
+    if (filters.priority) {
+      conditions.push(`priority = $${paramIndex++}`);
+      params.push(filters.priority);
+    }
+
+    if (filters.sessionId) {
+      conditions.push(`session_id = $${paramIndex++}`);
+      params.push(filters.sessionId);
+    }
+
+    if (filters.channel) {
+      conditions.push(`channel = $${paramIndex++}`);
+      params.push(filters.channel);
+    }
+
+    if (filters.createdAfter) {
+      conditions.push(`created_at >= $${paramIndex++}`);
+      params.push(filters.createdAfter);
+    }
+
+    if (filters.createdBefore) {
+      conditions.push(`created_at <= $${paramIndex++}`);
+      params.push(filters.createdBefore);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const query = `SELECT COUNT(*) as count FROM conversations ${whereClause}`;
+
+    const result = await this.pool.query(query, params);
+    return parseInt(result.rows[0].count, 10);
+  }
+
+  /**
    * Search conversations (defaults to semantic search)
    */
   async search(query: string, threshold: number = 0.7): Promise<SearchResult[]> {
@@ -230,13 +280,76 @@ export class PostgresStorageBackend implements StorageBackend {
   }
 
   /**
-   * Hybrid search combining keyword and semantic search
-   * TODO: Implement in Phase 2
+   * Hybrid search combining keyword (FTS) and semantic search (pgvector)
+   * Uses Reciprocal Rank Fusion (RRF) to combine scores
    */
   async hybridSearch(query: string, options?: HybridSearchOptions): Promise<SearchResult[]> {
-    // For now, fall back to semantic search
-    // Full implementation: combine PostgreSQL FTS + pgvector
-    return this.semanticSearch(query, options?.limit || 10, options?.threshold || 0.6);
+    const keywordWeight = options?.keywordWeight ?? 0.3;
+    const semanticWeight = options?.semanticWeight ?? 0.7;
+    const threshold = options?.threshold ?? 0.6;
+    const limit = options?.limit ?? 10;
+
+    // Generate query embedding for semantic search
+    const queryEmbedding = await this.generateEmbedding(query);
+
+    // Hybrid query: combines FTS rank and vector similarity
+    // Uses ts_rank for keyword scoring and cosine similarity for semantic scoring
+    const sqlQuery = `
+      WITH keyword_search AS (
+        SELECT
+          id,
+          ts_rank(
+            setweight(to_tsvector('english', COALESCE(title, '')), 'A') ||
+            setweight(to_tsvector('english', COALESCE(content::text, '')), 'B'),
+            plainto_tsquery('english', $1)
+          ) AS keyword_rank
+        FROM conversations
+        WHERE
+          to_tsvector('english', COALESCE(title, '')) ||
+          to_tsvector('english', COALESCE(content::text, ''))
+          @@ plainto_tsquery('english', $1)
+      ),
+      semantic_search AS (
+        SELECT
+          id,
+          1 - (embedding <=> $2::vector) AS semantic_score
+        FROM conversations
+        WHERE embedding IS NOT NULL
+      ),
+      combined AS (
+        SELECT
+          c.*,
+          COALESCE(k.keyword_rank, 0) AS keyword_score,
+          COALESCE(s.semantic_score, 0) AS semantic_score,
+          (COALESCE(k.keyword_rank, 0) * $3 + COALESCE(s.semantic_score, 0) * $4) AS combined_score
+        FROM conversations c
+        LEFT JOIN keyword_search k ON c.id = k.id
+        LEFT JOIN semantic_search s ON c.id = s.id
+        WHERE k.id IS NOT NULL OR (s.semantic_score IS NOT NULL AND s.semantic_score > $5)
+      )
+      SELECT *
+      FROM combined
+      WHERE combined_score > 0
+      ORDER BY combined_score DESC
+      LIMIT $6
+    `;
+
+    const result = await this.pool.query(sqlQuery, [
+      query,
+      `[${queryEmbedding.join(',')}]`,
+      keywordWeight,
+      semanticWeight,
+      threshold,
+      limit,
+    ]);
+
+    return result.rows.map((row) => ({
+      item: this.mapRowToItem(row),
+      similarity: row.semantic_score,
+      keywordScore: row.keyword_score,
+      semanticScore: row.semantic_score,
+      combinedScore: row.combined_score,
+    }));
   }
 
   /**

@@ -744,15 +744,26 @@ class CursorCollector(BaseCollector):
                     created_at_ms / 1000
                 )  # ms to seconds
 
-                # Create placeholder conversation (actual messages would need additional fetching)
-                # For now, we create a stub that can be enriched later
+                # Extract messages from composer object
+                messages = self._extract_composer_messages(composer, created_at)
+
+                # Generate title from first user message or use default
+                title = f"Cursor Composer Session ({mode})"
+                for msg in messages:
+                    if msg.role == "user" and msg.content:
+                        title = msg.content[:100] + ("..." if len(msg.content) > 100 else "")
+                        break
+
+                # Calculate updated_at from last message
+                updated_at = messages[-1].timestamp if messages else created_at
+
                 conv = Conversation(
                     id=f"cursor_composer_{composer_id}",
                     source=self.source_name,
-                    title=f"Cursor Composer Session ({mode})",
-                    messages=[],  # Would need to fetch actual messages
+                    title=title,
+                    messages=messages,
                     created_at=created_at,
-                    updated_at=created_at,
+                    updated_at=updated_at,
                     metadata={
                         "composer_id": composer_id,
                         "mode": mode,
@@ -761,8 +772,7 @@ class CursorCollector(BaseCollector):
                     },
                 )
 
-                # Only add if we have messages (TODO: implement message fetching)
-                # For now, skip empty conversations
+                # Only add if we have messages
                 if conv.messages:
                     conversations.append(conv)
 
@@ -770,6 +780,84 @@ class CursorCollector(BaseCollector):
             logger.debug(f"Error parsing Cursor composer data: {e}")
 
         return conversations
+
+    def _extract_composer_messages(
+        self, composer: Dict[str, Any], default_timestamp: datetime
+    ) -> List[Message]:
+        """Extract messages from a Cursor Composer object.
+
+        Cursor stores messages in various formats depending on version.
+        Common field names: conversationItems, bubbles, messages, conversation
+        """
+        messages: List[Message] = []
+
+        # Try different possible field names for conversation items
+        items = (
+            composer.get("conversationItems")
+            or composer.get("bubbles")
+            or composer.get("messages")
+            or composer.get("conversation", {}).get("items")
+            or []
+        )
+
+        for idx, item in enumerate(items):
+            try:
+                # Determine role
+                role = "user"
+                item_type = item.get("type", "").lower()
+                sender = item.get("sender", "").lower()
+                is_ai = item.get("isAI", False)
+
+                if item_type in ("assistant", "ai", "response", "bot") or is_ai:
+                    role = "assistant"
+                elif sender in ("assistant", "ai", "bot", "cursor"):
+                    role = "assistant"
+                elif item_type == "user" or sender == "user":
+                    role = "user"
+
+                # Extract content - try multiple possible fields
+                content = (
+                    item.get("text")
+                    or item.get("content")
+                    or item.get("message")
+                    or item.get("value")
+                    or ""
+                )
+
+                # Handle structured content
+                if isinstance(content, dict):
+                    content = content.get("text", "") or json.dumps(content)
+                elif isinstance(content, list):
+                    # Join list items
+                    content = "\n".join(
+                        str(c.get("text", c) if isinstance(c, dict) else c)
+                        for c in content
+                    )
+
+                if not content:
+                    continue
+
+                # Extract timestamp
+                ts = item.get("timestamp") or item.get("createdAt") or item.get("time")
+                if ts:
+                    timestamp = self.normalize_timestamp(
+                        ts / 1000 if isinstance(ts, (int, float)) and ts > 1e12 else ts
+                    )
+                else:
+                    # Use default with index offset for ordering
+                    timestamp = default_timestamp
+
+                messages.append(
+                    Message(role=role, content=str(content), timestamp=timestamp)
+                )
+
+            except Exception as e:
+                logger.debug(f"Error parsing composer message item: {e}")
+                continue
+
+        # Sort by timestamp
+        messages.sort(key=lambda m: m.timestamp)
+        return messages
 
     def _parse_ai_service_prompts(self, data: Dict[str, Any]) -> List[Conversation]:
         """Parse Cursor AI Service prompts"""
