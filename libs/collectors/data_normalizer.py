@@ -12,7 +12,7 @@ from typing import List, Dict, Optional, Any, Tuple, Set
 from dataclasses import dataclass
 import re
 
-from base_collector import Conversation, Message
+from .base_collector import Conversation, Message
 
 logger = logging.getLogger(__name__)
 

@@ -76,8 +76,8 @@ class Conversation(Base):
     participant_count = Column(Integer, default=2)
     message_count = Column(Integer, default=0)
 
-    # Embedding (qwen3-embedding:8b)
-    embedding = Column(Vector(4096))
+    # Embedding (qwen3-embedding:8b = 1024 dimensions)
+    embedding = Column(Vector(1024))
 
     # Derived metadata
     project = Column(String)

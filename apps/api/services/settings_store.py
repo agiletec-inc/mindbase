@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SETTINGS_PATH = Path.home() / ".config" / "mindbase" / "settings.json"
 _OVERRIDE_PATH: Path | None = None
@@ -39,7 +42,8 @@ def load_settings() -> Dict[str, Any]:
     contents = path.read_text(encoding="utf-8")
     try:
         return json.loads(contents) if contents.strip() else {}
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.warning(f"Corrupted settings file at {path}: {e}. Using defaults.")
         return {}
 
 
