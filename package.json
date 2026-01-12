@@ -12,6 +12,9 @@
     "allowedScripts": {},
     "onlyBuiltDependencies": [],
     "overrides": {
+      "body-parser": ">=2.2.1",
+      "glob": ">=10.5.0",
+      "js-yaml": ">=4.1.1",
       "qs": ">=6.14.1"
     },
     "peerDependencyRules": {
