@@ -75,7 +75,7 @@ def test_settings() -> Settings:
             os.getenv("OLLAMA_URL", "")
         ),
         EMBEDDING_MODEL=os.getenv("EMBEDDING_MODEL", "qwen3-embedding:8b"),
-        EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "4096")),
+        EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "1024")),
         DEBUG=True,
     )
 
