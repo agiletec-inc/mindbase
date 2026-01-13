@@ -165,6 +165,47 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: 'conversation_hybrid_search',
+    description: 'Hybrid search combining keyword (full-text) and semantic (vector) search with configurable weights',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query (used for both keyword and semantic search)',
+        },
+        keywordWeight: {
+          type: 'number',
+          description: 'Weight for keyword search results 0-1 (default: 0.3)',
+          minimum: 0,
+          maximum: 1,
+        },
+        semanticWeight: {
+          type: 'number',
+          description: 'Weight for semantic search results 0-1 (default: 0.7)',
+          minimum: 0,
+          maximum: 1,
+        },
+        threshold: {
+          type: 'number',
+          description: 'Minimum score threshold 0-1 (default: 0.6)',
+          minimum: 0,
+          maximum: 1,
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results (default: 10)',
+        },
+        source: {
+          type: 'string',
+          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf'],
+          description: 'Filter results by source platform',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'conversation_delete',
     description: 'Delete a conversation by ID',
     inputSchema: {
@@ -447,6 +488,10 @@ class MindBaseMCPServer {
 
           case 'conversation_search':
             result = await this.tools.conversationSearch(args as any);
+            break;
+
+          case 'conversation_hybrid_search':
+            result = await this.tools.conversationHybridSearch(args as any);
             break;
 
           case 'conversation_delete':

@@ -4,7 +4,7 @@
  * Tool implementations for conversation management
  */
 
-import type { StorageBackend, ConversationItem, QueryFilters } from '../storage/interface.js';
+import type { StorageBackend, ConversationItem, QueryFilters, HybridSearchOptions } from '../storage/interface.js';
 
 export class ConversationTools {
   private currentSessionId?: string;
@@ -142,6 +142,51 @@ export class ConversationTools {
         semanticScore: result.semanticScore,
       })),
       query: args.query,
+    };
+  }
+
+  /**
+   * conversation_hybrid_search - Hybrid search combining keyword and semantic search
+   */
+  async conversationHybridSearch(args: {
+    query: string;
+    keywordWeight?: number;
+    semanticWeight?: number;
+    threshold?: number;
+    limit?: number;
+    source?: string;
+  }): Promise<{
+    items: any[];
+    query: string;
+    weights: { keyword: number; semantic: number };
+  }> {
+    const options: HybridSearchOptions = {
+      keywordWeight: args.keywordWeight ?? 0.3,
+      semanticWeight: args.semanticWeight ?? 0.7,
+      threshold: args.threshold ?? 0.6,
+      limit: args.limit ?? 10,
+    };
+
+    const results = await this.storage.hybridSearch(args.query, options);
+
+    // Filter by source if specified
+    let filteredResults = results;
+    if (args.source) {
+      filteredResults = results.filter((r) => r.item.source === args.source);
+    }
+
+    return {
+      items: filteredResults.map((result) => ({
+        ...this.formatItem(result.item),
+        keywordScore: result.keywordScore,
+        semanticScore: result.semanticScore,
+        combinedScore: result.combinedScore,
+      })),
+      query: args.query,
+      weights: {
+        keyword: options.keywordWeight!,
+        semantic: options.semanticWeight!,
+      },
     };
   }
 
