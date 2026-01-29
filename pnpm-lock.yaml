@@ -5,7 +5,13 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@modelcontextprotocol/sdk': '>=1.25.2'
+  body-parser: '>=2.2.1'
+  glob: '>=10.5.0'
+  js-yaml: '>=4.1.1'
   qs: '>=6.14.1'
+  react-router: '>=7.12.0'
+  react-router-dom: '>=7.12.0'
 
 importers:
 
@@ -14,7 +20,7 @@ importers:
   apps/mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: ^1.25.2
+        specifier: '>=1.25.2'
         version: 1.25.2(hono@4.11.3)(zod@4.1.13)
       pg:
         specifier: ^8.16.3
@@ -60,7 +66,7 @@ importers:
         specifier: ^15.6.0
         version: 15.7.4(i18next@25.6.3(typescript@5.8.3))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.8.3)
       react-router-dom:
-        specifier: ^7.12.0
+        specifier: '>=7.12.0'
         version: 7.12.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       recharts:
         specifier: 3.2.0

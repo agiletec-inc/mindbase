@@ -144,3 +144,5 @@ $RECYCLE.BIN/
 manifest.toml
 workspace.yaml
 .envrc
+.pnpm-store/
+.workspace/
