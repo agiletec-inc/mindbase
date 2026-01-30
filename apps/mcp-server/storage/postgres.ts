@@ -247,8 +247,18 @@ export class PostgresStorageBackend implements StorageBackend {
     return this.semanticSearch(query, 10, threshold);
   }
 
+  // Default weights for fallback (used when sum <= 0)
+  private static readonly DEFAULT_WEIGHTS = {
+    keyword: 0.30,
+    semantic: 0.55,
+    recency: 0.15,
+  };
+
   /**
    * Semantic search using pgvector cosine similarity with optional recency weighting
+   *
+   * Note: pgvector's <=> returns cosine distance (0-2), so we use GREATEST(0, 1 - distance)
+   * to ensure semantic_score is always in [0, 1] range.
    */
   async semanticSearch(
     query: string,
@@ -262,20 +272,37 @@ export class PostgresStorageBackend implements StorageBackend {
     // Generate query embedding
     const queryEmbedding = await this.generateEmbedding(query);
 
-    // Normalize weights
-    const semanticWeight = 1 - recencyWeight;
+    // Validate and normalize weights (prevent division by zero)
+    let semanticW = 1 - recencyWeight;
+    let recencyW = recencyWeight;
+    const sum = semanticW + recencyW;
+    if (sum <= 0) {
+      // Fallback to defaults
+      semanticW = 1 - PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
+      recencyW = PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
+    } else {
+      semanticW /= sum;
+      recencyW /= sum;
+    }
 
+    // Validate recency parameters (prevent division by zero / negative)
+    const safeTauSeconds = Math.max(1, recencyTauSeconds);
+    const safeBoostDays = Math.max(0, recencyBoostDays);
+    const safeBoostValue = Math.max(0, Math.min(1, recencyBoostValue));
+
+    // SQL uses GREATEST(0, 1 - distance) to clamp cosine similarity to [0, 1]
+    // pgvector's <=> returns distance (0-2 for cosine), so 1-distance can be negative
     const sqlQuery = `
       SELECT
         c.*,
-        1 - (c.embedding <=> $1::vector) AS semantic_score,
+        GREATEST(0, 1 - (c.embedding <=> $1::vector)) AS semantic_score,
         LEAST(
           1.0,
           EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
           + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
         ) AS recency_score,
         (
-          (1 - (c.embedding <=> $1::vector)) * $7
+          GREATEST(0, 1 - (c.embedding <=> $1::vector)) * $7
           + LEAST(
               1.0,
               EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
@@ -284,7 +311,7 @@ export class PostgresStorageBackend implements StorageBackend {
         ) AS combined_score
       FROM conversations c
       WHERE c.embedding IS NOT NULL
-        AND 1 - (c.embedding <=> $1::vector) > $2
+        AND GREATEST(0, 1 - (c.embedding <=> $1::vector)) > $2
       ORDER BY combined_score DESC
       LIMIT $3
     `;
@@ -293,11 +320,11 @@ export class PostgresStorageBackend implements StorageBackend {
       `[${queryEmbedding.join(',')}]`, // $1: embedding
       threshold,                        // $2: threshold
       limit,                            // $3: limit
-      recencyTauSeconds,                // $4: decay constant (tau)
-      recencyBoostDays,                 // $5: boost window
-      recencyBoostValue,                // $6: boost value
-      semanticWeight,                   // $7: semantic weight
-      recencyWeight,                    // $8: recency weight
+      safeTauSeconds,                   // $4: decay constant (tau)
+      safeBoostDays,                    // $5: boost window
+      safeBoostValue,                   // $6: boost value
+      semanticW,                        // $7: semantic weight
+      recencyW,                         // $8: recency weight
     ]);
 
     return result.rows.map((row) => ({
@@ -314,26 +341,31 @@ export class PostgresStorageBackend implements StorageBackend {
    *
    * Score normalization:
    * - keyword: normalized via saturation function x/(x+1) -> 0-1
-   * - semantic: cosine similarity -> 0-1
+   * - semantic: cosine similarity clamped to 0-1 via GREATEST(0, 1-distance)
    * - recency: exp decay + boost, capped at 1.0
-   * - weights: auto-normalized to sum to 1.0
+   * - weights: auto-normalized to sum to 1.0 (falls back to defaults if sum <= 0)
    */
   async hybridSearch(query: string, options?: HybridSearchOptions): Promise<SearchResult[]> {
     // Default weights (will be normalized)
-    let keywordWeight = options?.keywordWeight ?? 0.30;
-    let semanticWeight = options?.semanticWeight ?? 0.55;
-    let recencyWeight = options?.recencyWeight ?? 0.15;
+    let keywordWeight = options?.keywordWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.keyword;
+    let semanticWeight = options?.semanticWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.semantic;
+    let recencyWeight = options?.recencyWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
     const threshold = options?.threshold ?? 0.6;
     const limit = options?.limit ?? 10;
 
-    // Recency parameters (use interface property names)
-    const recencyTauSeconds = options?.recencyTauSeconds ?? 1209600; // 14 days
-    const recencyBoostDays = options?.recencyBoostDays ?? 3;
-    const recencyBoostValue = options?.recencyBoostValue ?? 0.05;
+    // Recency parameters with validation
+    const safeTauSeconds = Math.max(1, options?.recencyTauSeconds ?? 1209600);
+    const safeBoostDays = Math.max(0, options?.recencyBoostDays ?? 3);
+    const safeBoostValue = Math.max(0, Math.min(1, options?.recencyBoostValue ?? 0.05));
 
-    // Normalize weights to sum to 1.0
+    // Normalize weights to sum to 1.0 (with fallback for sum <= 0)
     const weightSum = keywordWeight + semanticWeight + recencyWeight;
-    if (weightSum > 0) {
+    if (weightSum <= 0) {
+      // Fallback to defaults
+      keywordWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.keyword;
+      semanticWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.semantic;
+      recencyWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
+    } else {
       keywordWeight /= weightSum;
       semanticWeight /= weightSum;
       recencyWeight /= weightSum;
@@ -343,8 +375,8 @@ export class PostgresStorageBackend implements StorageBackend {
     const queryEmbedding = await this.generateEmbedding(query);
 
     // Hybrid query with:
-    // 1. keyword_norm: ts_rank normalized via saturation (x / (x + 1))
-    // 2. semantic_score: cosine similarity (already 0-1)
+    // 1. keyword_norm: ts_rank normalized via saturation (x / (x + 1)) -> 0-1
+    // 2. semantic_score: cosine similarity clamped to 0-1 via GREATEST(0, 1-distance)
     // 3. recency_score: exp decay + boost, capped at 1.0
     const sqlQuery = `
       WITH keyword_search AS (
@@ -364,7 +396,8 @@ export class PostgresStorageBackend implements StorageBackend {
       semantic_search AS (
         SELECT
           id,
-          1 - (embedding <=> $2::vector) AS semantic_score
+          -- Clamp to [0, 1]: pgvector <=> returns distance (0-2), so 1-dist can be negative
+          GREATEST(0, 1 - (embedding <=> $2::vector)) AS semantic_score
         FROM conversations
         WHERE embedding IS NOT NULL
       ),
@@ -373,7 +406,7 @@ export class PostgresStorageBackend implements StorageBackend {
           c.*,
           -- Keyword score: normalized via saturation function (0-1)
           COALESCE(k.keyword_rank, 0) / (COALESCE(k.keyword_rank, 0) + 1.0) AS keyword_score,
-          -- Semantic score: already 0-1
+          -- Semantic score: already clamped to 0-1
           COALESCE(s.semantic_score, 0) AS semantic_score,
           -- Recency score: exp decay + boost, capped at 1.0
           LEAST(
@@ -402,9 +435,9 @@ export class PostgresStorageBackend implements StorageBackend {
       semanticWeight,                  // $4: normalized semantic weight
       recencyWeight,                   // $5: normalized recency weight
       threshold,                       // $6: semantic threshold
-      recencyTauSeconds,               // $7: decay constant (tau)
-      recencyBoostDays,                // $8: boost window (days)
-      recencyBoostValue,               // $9: boost value
+      safeTauSeconds,                  // $7: decay constant (tau)
+      safeBoostDays,                   // $8: boost window (days)
+      safeBoostValue,                  // $9: boost value
       limit,                           // $10: result limit
     ]);
 

@@ -72,6 +72,10 @@ async def create_conversation_record(
     return db_conversation
 
 
+# Default weights for fallback (used when sum <= 0)
+DEFAULT_RECENCY_WEIGHT = 0.15
+
+
 async def search_conversations(
     db: AsyncSession,
     query_embedding: List[float],
@@ -89,17 +93,35 @@ async def search_conversations(
     """Search conversations using vector similarity with recency ranking.
 
     Scores are normalized to 0-1 range:
-    - semantic_score: cosine similarity (0-1)
+    - semantic_score: cosine similarity clamped to [0, 1] via GREATEST(0, ...)
     - recency_score: exponential decay + boost, capped at 1.0
     - combined_score: weighted sum (weights normalized to sum to 1)
+
+    Note: pgvector's <=> returns cosine distance (0-2), so 1-distance can be
+    negative for very dissimilar vectors. We use GREATEST(0, ...) to clamp.
     """
 
-    # Normalize weights to sum to 1
-    semantic_weight = 1.0 - recency_weight
+    # Validate and normalize weights (prevent division by zero)
+    semantic_w = 1.0 - recency_weight
+    recency_w = recency_weight
+    weight_sum = semantic_w + recency_w
+    if weight_sum <= 0:
+        # Fallback to defaults
+        semantic_w = 1.0 - DEFAULT_RECENCY_WEIGHT
+        recency_w = DEFAULT_RECENCY_WEIGHT
+    else:
+        semantic_w /= weight_sum
+        recency_w /= weight_sum
 
+    # Validate recency parameters (prevent division by zero / negative)
+    safe_tau_seconds = max(1, recency_tau_seconds)
+    safe_boost_days = max(0, recency_boost_days)
+    safe_boost_value = max(0.0, min(1.0, recency_boost_value))
+
+    # SQL uses GREATEST(0, 1 - distance) to clamp cosine similarity to [0, 1]
     query_text = """
     SELECT *,
-           (1 - (embedding <=> CAST(:embedding AS vector))) AS semantic_score,
+           GREATEST(0, 1 - (embedding <=> CAST(:embedding AS vector))) AS semantic_score,
            LEAST(
                1.0,
                EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(created_at, to_timestamp(0)))) / :tau_seconds)
@@ -110,7 +132,7 @@ async def search_conversations(
                  END
            ) AS recency_score,
            (
-               (1 - (embedding <=> CAST(:embedding AS vector))) * :semantic_weight
+               GREATEST(0, 1 - (embedding <=> CAST(:embedding AS vector))) * :semantic_weight
                + LEAST(
                    1.0,
                    EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(created_at, to_timestamp(0)))) / :tau_seconds)
@@ -121,10 +143,10 @@ async def search_conversations(
                      END
                ) * :recency_weight
            ) AS combined_score,
-           (1 - (embedding <=> CAST(:embedding AS vector))) AS similarity
+           GREATEST(0, 1 - (embedding <=> CAST(:embedding AS vector))) AS similarity
     FROM conversations
     WHERE embedding IS NOT NULL
-          AND (1 - (embedding <=> CAST(:embedding AS vector))) >= :threshold
+          AND GREATEST(0, 1 - (embedding <=> CAST(:embedding AS vector))) >= :threshold
     """
 
     if source:
@@ -145,11 +167,11 @@ async def search_conversations(
         "embedding": str(query_embedding),
         "threshold": threshold,
         "limit": limit,
-        "tau_seconds": recency_tau_seconds,
-        "boost_days": recency_boost_days,
-        "boost_value": recency_boost_value,
-        "semantic_weight": semantic_weight,
-        "recency_weight": recency_weight,
+        "tau_seconds": safe_tau_seconds,
+        "boost_days": safe_boost_days,
+        "boost_value": safe_boost_value,
+        "semantic_weight": semantic_w,
+        "recency_weight": recency_w,
     }
     if source:
         params["source"] = source
