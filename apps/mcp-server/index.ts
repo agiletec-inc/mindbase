@@ -137,7 +137,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'conversation_search',
-    description: 'Semantic search across conversations using pgvector cosine similarity',
+    description: 'Semantic search across conversations using pgvector cosine similarity with recency ranking',
     inputSchema: {
       type: 'object',
       properties: {
@@ -160,13 +160,33 @@ const TOOLS: Tool[] = [
           enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf'],
           description: 'Filter results by source platform',
         },
+        recencyWeight: {
+          type: 'number',
+          description: 'Weight for recency in ranking (default: 0.15). Higher values favor recent conversations.',
+          minimum: 0,
+          maximum: 1,
+        },
+        recencyTauSeconds: {
+          type: 'number',
+          description: 'Decay time constant in seconds (default: 1209600 = 14 days)',
+        },
+        recencyBoostDays: {
+          type: 'number',
+          description: 'Days within which items get a recency boost (default: 3)',
+        },
+        recencyBoostValue: {
+          type: 'number',
+          description: 'Boost value for recent items (default: 0.05)',
+          minimum: 0,
+          maximum: 1,
+        },
       },
       required: ['query'],
     },
   },
   {
     name: 'conversation_hybrid_search',
-    description: 'Hybrid search combining keyword (full-text) and semantic (vector) search with configurable weights',
+    description: 'Hybrid search combining keyword (full-text), semantic (vector), and recency with configurable weights. Weights are auto-normalized to sum to 1.0.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -176,15 +196,18 @@ const TOOLS: Tool[] = [
         },
         keywordWeight: {
           type: 'number',
-          description: 'Weight for keyword search results 0-1 (default: 0.3)',
+          description: 'Weight for keyword search (default: 0.30). Normalized with other weights.',
           minimum: 0,
-          maximum: 1,
         },
         semanticWeight: {
           type: 'number',
-          description: 'Weight for semantic search results 0-1 (default: 0.7)',
+          description: 'Weight for semantic search (default: 0.55). Normalized with other weights.',
           minimum: 0,
-          maximum: 1,
+        },
+        recencyWeight: {
+          type: 'number',
+          description: 'Weight for recency ranking (default: 0.15). Normalized with other weights.',
+          minimum: 0,
         },
         threshold: {
           type: 'number',
@@ -200,6 +223,20 @@ const TOOLS: Tool[] = [
           type: 'string',
           enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf'],
           description: 'Filter results by source platform',
+        },
+        recencyTauSeconds: {
+          type: 'number',
+          description: 'Decay time constant in seconds (default: 1209600 = 14 days)',
+        },
+        recencyBoostDays: {
+          type: 'number',
+          description: 'Days within which items get a recency boost (default: 3)',
+        },
+        recencyBoostValue: {
+          type: 'number',
+          description: 'Boost value for recent items (default: 0.05)',
+          minimum: 0,
+          maximum: 1,
         },
       },
       required: ['query'],

@@ -41,19 +41,32 @@ export interface QueryFilters {
   createdBefore?: Date;
 }
 
+/**
+ * Hybrid search options with recency ranking
+ *
+ * IMPORTANT: Weights are automatically normalized to sum to 1.0
+ * You can pass any values; they will be proportionally adjusted.
+ */
 export interface HybridSearchOptions {
-  keywordWeight?: number; // 0-1, default 0.3
-  semanticWeight?: number; // 0-1, default 0.7
+  keywordWeight?: number; // default 0.30
+  semanticWeight?: number; // default 0.55
+  recencyWeight?: number; // default 0.15
   threshold?: number; // 0-1, default 0.6
   limit?: number; // default 10
+  // Recency decay: score = exp(-age_seconds / tauSeconds)
+  recencyTauSeconds?: number; // default 1209600 (14 days)
+  // Boost for very recent items
+  recencyBoostDays?: number; // default 3
+  recencyBoostValue?: number; // default 0.05
 }
 
 export interface SearchResult {
   item: ConversationItem;
   similarity?: number;
-  keywordScore?: number;
-  semanticScore?: number;
-  combinedScore?: number;
+  keywordScore?: number; // normalized 0-1
+  semanticScore?: number; // 0-1
+  recencyScore?: number; // 0-1 (with cap)
+  combinedScore?: number; // weighted sum of above
 }
 
 /**

@@ -248,52 +248,104 @@ export class PostgresStorageBackend implements StorageBackend {
   }
 
   /**
-   * Semantic search using pgvector cosine similarity
+   * Semantic search using pgvector cosine similarity with optional recency weighting
    */
-  async semanticSearch(query: string, limit: number = 10, threshold: number = 0.7): Promise<SearchResult[]> {
+  async semanticSearch(
+    query: string,
+    limit: number = 10,
+    threshold: number = 0.7,
+    recencyWeight: number = 0.15,
+    recencyTauSeconds: number = 1209600, // 14 days
+    recencyBoostDays: number = 3,
+    recencyBoostValue: number = 0.05
+  ): Promise<SearchResult[]> {
     // Generate query embedding
     const queryEmbedding = await this.generateEmbedding(query);
 
+    // Normalize weights
+    const semanticWeight = 1 - recencyWeight;
+
     const sqlQuery = `
       SELECT
-        *,
-        1 - (embedding <=> $1::vector) as similarity
-      FROM conversations
-      WHERE embedding IS NOT NULL
-        AND 1 - (embedding <=> $1::vector) > $2
-      ORDER BY embedding <=> $1::vector
+        c.*,
+        1 - (c.embedding <=> $1::vector) AS semantic_score,
+        LEAST(
+          1.0,
+          EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
+          + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
+        ) AS recency_score,
+        (
+          (1 - (c.embedding <=> $1::vector)) * $7
+          + LEAST(
+              1.0,
+              EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
+              + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
+            ) * $8
+        ) AS combined_score
+      FROM conversations c
+      WHERE c.embedding IS NOT NULL
+        AND 1 - (c.embedding <=> $1::vector) > $2
+      ORDER BY combined_score DESC
       LIMIT $3
     `;
 
     const result = await this.pool.query(sqlQuery, [
-      `[${queryEmbedding.join(',')}]`,
-      threshold,
-      limit,
+      `[${queryEmbedding.join(',')}]`, // $1: embedding
+      threshold,                        // $2: threshold
+      limit,                            // $3: limit
+      recencyTauSeconds,                // $4: decay constant (tau)
+      recencyBoostDays,                 // $5: boost window
+      recencyBoostValue,                // $6: boost value
+      semanticWeight,                   // $7: semantic weight
+      recencyWeight,                    // $8: recency weight
     ]);
 
     return result.rows.map((row) => ({
       item: this.mapRowToItem(row),
-      similarity: row.similarity,
-      semanticScore: row.similarity,
-      combinedScore: row.similarity,
+      similarity: row.semantic_score,
+      semanticScore: row.semantic_score,
+      recencyScore: row.recency_score,
+      combinedScore: row.combined_score,
     }));
   }
 
   /**
-   * Hybrid search combining keyword (FTS) and semantic search (pgvector)
-   * Uses Reciprocal Rank Fusion (RRF) to combine scores
+   * Hybrid search combining keyword (FTS), semantic search (pgvector), and recency
+   *
+   * Score normalization:
+   * - keyword: normalized via saturation function x/(x+1) -> 0-1
+   * - semantic: cosine similarity -> 0-1
+   * - recency: exp decay + boost, capped at 1.0
+   * - weights: auto-normalized to sum to 1.0
    */
   async hybridSearch(query: string, options?: HybridSearchOptions): Promise<SearchResult[]> {
-    const keywordWeight = options?.keywordWeight ?? 0.3;
-    const semanticWeight = options?.semanticWeight ?? 0.7;
+    // Default weights (will be normalized)
+    let keywordWeight = options?.keywordWeight ?? 0.30;
+    let semanticWeight = options?.semanticWeight ?? 0.55;
+    let recencyWeight = options?.recencyWeight ?? 0.15;
     const threshold = options?.threshold ?? 0.6;
     const limit = options?.limit ?? 10;
+
+    // Recency parameters (use interface property names)
+    const recencyTauSeconds = options?.recencyTauSeconds ?? 1209600; // 14 days
+    const recencyBoostDays = options?.recencyBoostDays ?? 3;
+    const recencyBoostValue = options?.recencyBoostValue ?? 0.05;
+
+    // Normalize weights to sum to 1.0
+    const weightSum = keywordWeight + semanticWeight + recencyWeight;
+    if (weightSum > 0) {
+      keywordWeight /= weightSum;
+      semanticWeight /= weightSum;
+      recencyWeight /= weightSum;
+    }
 
     // Generate query embedding for semantic search
     const queryEmbedding = await this.generateEmbedding(query);
 
-    // Hybrid query: combines FTS rank and vector similarity
-    // Uses ts_rank for keyword scoring and cosine similarity for semantic scoring
+    // Hybrid query with:
+    // 1. keyword_norm: ts_rank normalized via saturation (x / (x + 1))
+    // 2. semantic_score: cosine similarity (already 0-1)
+    // 3. recency_score: exp decay + boost, capped at 1.0
     const sqlQuery = `
       WITH keyword_search AS (
         SELECT
@@ -319,28 +371,41 @@ export class PostgresStorageBackend implements StorageBackend {
       combined AS (
         SELECT
           c.*,
-          COALESCE(k.keyword_rank, 0) AS keyword_score,
+          -- Keyword score: normalized via saturation function (0-1)
+          COALESCE(k.keyword_rank, 0) / (COALESCE(k.keyword_rank, 0) + 1.0) AS keyword_score,
+          -- Semantic score: already 0-1
           COALESCE(s.semantic_score, 0) AS semantic_score,
-          (COALESCE(k.keyword_rank, 0) * $3 + COALESCE(s.semantic_score, 0) * $4) AS combined_score
+          -- Recency score: exp decay + boost, capped at 1.0
+          LEAST(
+            1.0,
+            EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $7)
+            + CASE WHEN c.created_at >= NOW() - ($8::int * INTERVAL '1 day') THEN $9 ELSE 0 END
+          ) AS recency_score
         FROM conversations c
         LEFT JOIN keyword_search k ON c.id = k.id
         LEFT JOIN semantic_search s ON c.id = s.id
-        WHERE k.id IS NOT NULL OR (s.semantic_score IS NOT NULL AND s.semantic_score > $5)
+        WHERE k.id IS NOT NULL OR (s.semantic_score IS NOT NULL AND s.semantic_score > $6)
       )
-      SELECT *
+      SELECT
+        *,
+        (keyword_score * $3 + semantic_score * $4 + recency_score * $5) AS combined_score
       FROM combined
-      WHERE combined_score > 0
+      WHERE (keyword_score * $3 + semantic_score * $4 + recency_score * $5) > 0
       ORDER BY combined_score DESC
-      LIMIT $6
+      LIMIT $10
     `;
 
     const result = await this.pool.query(sqlQuery, [
-      query,
-      `[${queryEmbedding.join(',')}]`,
-      keywordWeight,
-      semanticWeight,
-      threshold,
-      limit,
+      query,                           // $1: search query
+      `[${queryEmbedding.join(',')}]`, // $2: embedding vector
+      keywordWeight,                   // $3: normalized keyword weight
+      semanticWeight,                  // $4: normalized semantic weight
+      recencyWeight,                   // $5: normalized recency weight
+      threshold,                       // $6: semantic threshold
+      recencyTauSeconds,               // $7: decay constant (tau)
+      recencyBoostDays,                // $8: boost window (days)
+      recencyBoostValue,               // $9: boost value
+      limit,                           // $10: result limit
     ]);
 
     return result.rows.map((row) => ({
@@ -348,6 +413,7 @@ export class PostgresStorageBackend implements StorageBackend {
       similarity: row.semantic_score,
       keywordScore: row.keyword_score,
       semanticScore: row.semantic_score,
+      recencyScore: row.recency_score,
       combinedScore: row.combined_score,
     }));
   }

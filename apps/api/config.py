@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["*"]
 
+    # Search Recency Settings
+    SEARCH_RECENCY_TAU_SECONDS: int = 1209600  # 14 days decay constant
+    SEARCH_RECENCY_WEIGHT: float = 0.15  # Weight for recency in combined score
+    SEARCH_RECENCY_BOOST_DAYS: int = 3  # Days for recency boost
+    SEARCH_RECENCY_BOOST_VALUE: float = 0.05  # Boost value for recent items
+
     class Config:
         env_file = ".env"
         case_sensitive = True

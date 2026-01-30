@@ -81,11 +81,46 @@ async def search_conversations(
     project: str | None = None,
     topic: str | None = None,
     workspace_path: str | None = None,
+    recency_weight: float = 0.15,
+    recency_tau_seconds: int = 1209600,  # 14 days
+    recency_boost_days: int = 3,
+    recency_boost_value: float = 0.05,
 ) -> List[Conversation]:
-    """Search conversations using vector similarity."""
+    """Search conversations using vector similarity with recency ranking.
+
+    Scores are normalized to 0-1 range:
+    - semantic_score: cosine similarity (0-1)
+    - recency_score: exponential decay + boost, capped at 1.0
+    - combined_score: weighted sum (weights normalized to sum to 1)
+    """
+
+    # Normalize weights to sum to 1
+    semantic_weight = 1.0 - recency_weight
 
     query_text = """
     SELECT *,
+           (1 - (embedding <=> CAST(:embedding AS vector))) AS semantic_score,
+           LEAST(
+               1.0,
+               EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(created_at, to_timestamp(0)))) / :tau_seconds)
+               + CASE
+                   WHEN created_at >= NOW() - (:boost_days * INTERVAL '1 day')
+                   THEN :boost_value
+                   ELSE 0
+                 END
+           ) AS recency_score,
+           (
+               (1 - (embedding <=> CAST(:embedding AS vector))) * :semantic_weight
+               + LEAST(
+                   1.0,
+                   EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(created_at, to_timestamp(0)))) / :tau_seconds)
+                   + CASE
+                       WHEN created_at >= NOW() - (:boost_days * INTERVAL '1 day')
+                       THEN :boost_value
+                       ELSE 0
+                     END
+               ) * :recency_weight
+           ) AS combined_score,
            (1 - (embedding <=> CAST(:embedding AS vector))) AS similarity
     FROM conversations
     WHERE embedding IS NOT NULL
@@ -104,12 +139,17 @@ async def search_conversations(
     if workspace_path:
         query_text += " AND workspace_path = :workspace_path"
 
-    query_text += " ORDER BY embedding <=> CAST(:embedding AS vector) LIMIT :limit"
+    query_text += " ORDER BY combined_score DESC LIMIT :limit"
 
     params = {
         "embedding": str(query_embedding),
         "threshold": threshold,
         "limit": limit,
+        "tau_seconds": recency_tau_seconds,
+        "boost_days": recency_boost_days,
+        "boost_value": recency_boost_value,
+        "semantic_weight": semantic_weight,
+        "recency_weight": recency_weight,
     }
     if source:
         params["source"] = source
