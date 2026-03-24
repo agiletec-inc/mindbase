@@ -4,7 +4,7 @@
  * Tool implementations for conversation management
  */
 
-import type { StorageBackend, ConversationItem, QueryFilters, HybridSearchOptions } from '../storage/interface.js';
+import type { StorageBackend, ConversationItem, QueryFilters, HybridSearchOptions, TimelineOptions, TopicGroup } from '../storage/interface.js';
 
 export class ConversationTools {
   private currentSessionId?: string;
@@ -342,6 +342,226 @@ export class ConversationTools {
       success,
       deletedId: success ? args.id : undefined,
     };
+  }
+
+  /**
+   * conversation_timeline - Cross-source chronological view
+   */
+  async conversationTimeline(args: {
+    sources?: string[];
+    project?: string;
+    createdAfter?: string;
+    createdBefore?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    entries: any[];
+    total: number;
+  }> {
+    const options: TimelineOptions = {
+      sources: args.sources,
+      project: args.project,
+      createdAfter: args.createdAfter ? new Date(args.createdAfter) : undefined,
+      createdBefore: args.createdBefore ? new Date(args.createdBefore) : undefined,
+      limit: args.limit || 50,
+      offset: args.offset || 0,
+    };
+
+    const entries = await this.storage.getTimeline(options);
+    const total = await this.storage.count({
+      source: args.sources?.[0],
+      createdAfter: options.createdAfter,
+      createdBefore: options.createdBefore,
+    });
+
+    return {
+      entries: entries.map((e) => ({
+        id: e.id,
+        source: e.source,
+        title: e.title,
+        project: e.project,
+        messageCount: e.messageCount,
+        topics: e.topics,
+        createdAt: e.createdAt instanceof Date ? e.createdAt.toISOString() : e.createdAt,
+        updatedAt: e.updatedAt instanceof Date ? e.updatedAt.toISOString() : e.updatedAt,
+      })),
+      total,
+    };
+  }
+
+  /**
+   * conversation_topics - Topic grouping across sources
+   */
+  async conversationTopics(args?: {
+    limit?: number;
+    minCount?: number;
+  }): Promise<{
+    topics: any[];
+    total: number;
+  }> {
+    const limit = args?.limit || 20;
+    const minCount = args?.minCount || 1;
+
+    const topics = await this.storage.getTopics(limit, minCount);
+
+    return {
+      topics: topics.map((t) => ({
+        topic: t.topic,
+        conversationCount: t.conversationCount,
+        sources: t.sources,
+        latestAt: t.latestAt instanceof Date ? t.latestAt.toISOString() : t.latestAt,
+        earliestAt: t.earliestAt instanceof Date ? t.earliestAt.toISOString() : t.earliestAt,
+        conversationIds: t.conversationIds.slice(0, 10), // Limit IDs for readability
+      })),
+      total: topics.length,
+    };
+  }
+
+  /**
+   * content_generate - Generate article draft from conversation data
+   */
+  async contentGenerate(args: {
+    topic: string;
+    platform: 'qiita' | 'zenn' | 'note';
+    conversationIds?: string[];
+    style?: string;
+  }): Promise<{
+    title: string;
+    content: string;
+    platform: string;
+    metadata: Record<string, any>;
+  }> {
+    // Gather source material from conversations
+    let conversations: ConversationItem[] = [];
+
+    if (args.conversationIds && args.conversationIds.length > 0) {
+      // Fetch specified conversations
+      for (const id of args.conversationIds) {
+        const item = await this.storage.getById(id);
+        if (item) conversations.push(item);
+      }
+    } else {
+      // Search for relevant conversations by topic
+      const results = await this.storage.semanticSearch(args.topic, 10, 0.5);
+      conversations = results.map((r) => r.item);
+    }
+
+    if (conversations.length === 0) {
+      throw new Error(`No conversations found for topic: ${args.topic}`);
+    }
+
+    // Extract key content from conversations
+    const sourceContent = conversations.map((c) => {
+      const messages = c.content?.messages || [];
+      const keyMessages = messages
+        .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+        .slice(0, 20) // Limit to first 20 messages per conversation
+        .map((m: any) => `**${m.role}**: ${typeof m.content === 'string' ? m.content.substring(0, 500) : JSON.stringify(m.content).substring(0, 500)}`);
+
+      return {
+        title: c.title,
+        source: c.source,
+        date: c.createdAt instanceof Date ? c.createdAt.toISOString().split('T')[0] : String(c.createdAt).split('T')[0],
+        messages: keyMessages,
+      };
+    });
+
+    // Generate platform-specific article structure
+    const article = this.generateArticleStructure(args.topic, args.platform, sourceContent, args.style);
+
+    return {
+      title: article.title,
+      content: article.content,
+      platform: args.platform,
+      metadata: {
+        sourceConversations: conversations.length,
+        sourceIds: conversations.map((c) => c.id),
+        generatedAt: new Date().toISOString(),
+        style: args.style || 'technical',
+      },
+    };
+  }
+
+  /**
+   * Generate article structure based on platform conventions
+   */
+  private generateArticleStructure(
+    topic: string,
+    platform: 'qiita' | 'zenn' | 'note',
+    sources: any[],
+    style?: string
+  ): { title: string; content: string } {
+    const conversationSummary = sources
+      .map((s) => `### ${s.title} (${s.source}, ${s.date})\n\n${s.messages.join('\n\n')}`)
+      .join('\n\n---\n\n');
+
+    switch (platform) {
+      case 'qiita': {
+        const title = `${topic}`;
+        const content = `---
+title: "${topic}"
+tags:
+  - name: "AI"
+  - name: "LLM"
+  - name: "開発"
+private: true
+---
+
+## はじめに
+
+<!-- この記事は MindBase の会話データから自動生成されたドラフトです -->
+<!-- ${sources.length}件の会話から構成 -->
+
+## 背景
+
+<!-- 以下の会話内容を元にセクションを構成してください -->
+
+${conversationSummary}
+
+## まとめ
+
+<!-- 上記の会話内容をまとめてください -->
+`;
+        return { title, content };
+      }
+
+      case 'zenn': {
+        const title = `${topic}`;
+        const content = `---
+title: "${topic}"
+emoji: "🤖"
+type: "tech"
+topics: ["AI", "LLM", "開発"]
+published: false
+---
+
+## はじめに
+
+<!-- MindBase 自動生成ドラフト: ${sources.length}件の会話から -->
+
+${conversationSummary}
+
+## まとめ
+`;
+        return { title, content };
+      }
+
+      case 'note': {
+        const title = `${topic}`;
+        const content = `# ${topic}
+
+<!-- MindBase 自動生成ドラフト: ${sources.length}件の会話から -->
+<!-- Note向け: ストーリー性を重視した構成にしてください -->
+
+${conversationSummary}
+
+---
+
+*この記事は複数のAI会話から自動的にドラフトが生成されました。*
+`;
+        return { title, content };
+      }
+    }
   }
 
   /**

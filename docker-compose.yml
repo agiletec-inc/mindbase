@@ -31,9 +31,11 @@ services:
       - "${API_PORT:-18003}:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-mindbase}:${POSTGRES_PASSWORD:-mindbase_dev}@postgres:${POSTGRES_INTERNAL_PORT:-5432}/${POSTGRES_DB:-mindbase_dev}}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-large}
       - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-qwen3-embedding:8b}
-      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-4096}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-3072}
       - DEBUG=${DEBUG:-true}
       - PYTHONPATH=/app/app:/workspace/mindbase
     depends_on:

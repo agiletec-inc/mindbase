@@ -50,8 +50,8 @@ make api-shell       # Enter container, then run commands inside
 **Key Integration**: Part of [AIRIS MCP Gateway](https://github.com/agiletec-inc/airis-mcp-gateway) which provides unified MCP access. MindBase exposes `mindbase_search` and `mindbase_store` tools.
 
 **Stack**: Hybrid Python/TypeScript pnpm monorepo
-- **Storage**: PostgreSQL 17 + pgvector (1024-dim vectors)
-- **Embeddings**: Ollama with qwen3-embedding:8b (local, free)
+- **Storage**: PostgreSQL 17 + pgvector
+- **Embeddings**: OpenAI text-embedding-3-large (3072-dim, primary) → Ollama qwen3-embedding:8b (1024-dim, fallback)
 - **API**: FastAPI (Python)
 - **MCP Server**: TypeScript (stdio transport)
 
@@ -61,7 +61,7 @@ make api-shell       # Enter container, then run commands inside
 
 ```bash
 cp .env.example .env          # Configure environment
-make up                       # Start PostgreSQL + API + Ollama
+make up                       # Start PostgreSQL + API (+ Ollama on non-Apple Silicon)
 make model-pull               # Download embedding model (~4.7GB, first time only)
 make migrate                  # Run database migrations
 make health                   # Verify all services running
@@ -114,13 +114,13 @@ tests/                # pytest tests (unit/integration/e2e markers)
 - `main.py` - FastAPI app with CORS, route registration
 - `config.py` - Pydantic settings from environment
 - `database.py` - SQLAlchemy async engine with pgvector
-- `ollama_client.py` - Embedding client (qwen3-embedding:8b, 1024-dim)
+- `ollama_client.py` - EmbeddingClient with dual provider (OpenAI → Ollama fallback)
 
 **MCP Server (`apps/mcp-server/`)**:
 - `index.ts` - MCP entry point (stdio transport)
 - `storage/postgres.ts` - Conversation storage backend
 - `storage/memory-fs.ts` - Markdown memory storage (Serena-inspired)
-- `tools/conversation.ts` - conversation_save, conversation_get, conversation_search, conversation_delete
+- `tools/conversation.ts` - conversation_save/get/search/delete, conversation_hybrid_search, conversation_timeline, conversation_topics, session_*, content_generate
 - `tools/memory.ts` - memory_write, memory_read, memory_list, memory_search, memory_delete
 
 **Collectors (`libs/collectors/`)**:
@@ -146,11 +146,30 @@ tests/                # pytest tests (unit/integration/e2e markers)
 - **Error handling**: All tools return `{error: message}` on failure (no exceptions to client)
 - **Hybrid memory**: Markdown files (human-readable) + PostgreSQL (semantic search)
 
-### Embedding Model
+### Embedding Strategy (Dual Provider)
 
-- **Model**: qwen3-embedding:8b via Ollama
-- **Dimensions**: 1024 (auto-detected, can override via EMBEDDING_DIMENSIONS)
-- **Index**: ivfflat for pgvector similarity search
+- **Primary**: OpenAI `text-embedding-3-large` (3072-dim) — requires `OPENAI_API_KEY`
+- **Fallback**: Ollama `qwen3-embedding:8b` (1024-dim) — local, free
+- Both Python (`ollama_client.py`) and TypeScript (`storage/postgres.ts`) implement the same fallback logic
+- Dimensions auto-detected; override with `EMBEDDING_DIMENSIONS`
+- Index: ivfflat for pgvector similarity search
+
+### Data Pipeline (Raw → Derived)
+
+1. `conversation_save` (MCP) or `POST /conversations/store` (API) receives raw data
+2. `RawConversation` stored append-only (immutable payload)
+3. Deriver (`services/deriver.py`) processes: embedding generation, topic extraction, metadata enrichment
+4. `Conversation` created with vector embedding for semantic search
+5. `DERIVE_ON_STORE=true` (default) triggers derivation immediately; otherwise background worker processes
+
+### Hybrid Search
+
+Three scoring components combined with auto-normalized weights:
+- **Keyword**: PostgreSQL full-text search (`ts_rank`)
+- **Semantic**: pgvector cosine similarity on embedding vectors
+- **Recency**: Exponential decay `exp(-age / tau)` with boost for recent items
+
+Tuning via env vars: `SEARCH_RECENCY_TAU_SECONDS` (14d default), `SEARCH_RECENCY_WEIGHT` (0.15), `SEARCH_RECENCY_BOOST_DAYS` (3), `SEARCH_RECENCY_BOOST_VALUE` (0.05)
 
 ## Development Conventions
 
@@ -185,6 +204,9 @@ pytest tests/ -k "test_embedding" -v      # Pattern match
 black apps/api/ libs/collectors/          # Format
 ruff check apps/api/ libs/collectors/     # Lint
 mypy apps/api/ libs/collectors/           # Type check
+
+# TypeScript (from host)
+pnpm --filter @mindbase/mcp-server typecheck
 ```
 
 ## Common Tasks

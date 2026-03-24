@@ -16,6 +16,8 @@ export class FileSystemMemoryBackend implements MemoryStorageBackend {
   private pool?: Pool;
   private ollamaUrl?: string;
   private embeddingModel?: string;
+  private openaiApiKey?: string;
+  private openaiModel: string;
 
   constructor(
     baseDir?: string,
@@ -28,6 +30,8 @@ export class FileSystemMemoryBackend implements MemoryStorageBackend {
       baseDir || join(homedir(), 'Library', 'Application Support', 'mindbase', 'memories');
     this.ollamaUrl = ollamaUrl;
     this.embeddingModel = embeddingModel;
+    this.openaiApiKey = process.env.OPENAI_API_KEY || undefined;
+    this.openaiModel = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large';
 
     // Optional: PostgreSQL for semantic search
     if (connectionString) {
@@ -121,13 +125,41 @@ export class FileSystemMemoryBackend implements MemoryStorageBackend {
   }
 
   /**
-   * Generate embedding using Ollama
+   * Generate embedding using OpenAI (primary) with Ollama fallback
    */
   private async generateEmbedding(text: string): Promise<number[] | undefined> {
     if (!this.pool) {
       return undefined; // Skip embedding if no database
     }
 
+    // Try OpenAI first if API key is configured
+    if (this.openaiApiKey) {
+      try {
+        const response = await fetch('https://api.openai.com/v1/embeddings', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.openaiModel,
+            input: text,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`OpenAI API error: ${response.status} ${errorText}`);
+        } else {
+          const data = await response.json() as { data: Array<{ embedding: number[]; index: number }> };
+          return data.data[0].embedding;
+        }
+      } catch (error) {
+        console.error('OpenAI embedding failed, falling back to Ollama:', error);
+      }
+    }
+
+    // Fallback to Ollama
     try {
       const response = await fetch(`${this.ollamaUrl}/api/embeddings`, {
         method: 'POST',

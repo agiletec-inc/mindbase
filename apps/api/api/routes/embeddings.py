@@ -101,12 +101,19 @@ class EmbeddingGenerateResponse(BaseModel):
 # === Model Database ===
 
 MODEL_CATALOG = {
+    "text-embedding-3-large": {
+        "size": "cloud",
+        "dimensions": 3072,
+        "mteb_score": 64.59,
+        "ram_required": "N/A (API)",
+        "description": "OpenAI cloud API, fast & reliable, ~$0.13/1M tokens",
+    },
     "qwen3-embedding:8b": {
         "size": "4.7GB",
-        "dimensions": 1024,
+        "dimensions": 4096,
         "mteb_score": 70.58,
         "ram_required": "8-16GB",
-        "description": "#1 MTEB multilingual + code",
+        "description": "#1 MTEB multilingual + code (local Ollama)",
     },
     "mxbai-embed-large": {
         "size": "670MB",

@@ -13,6 +13,9 @@ import type {
   QueryFilters,
   HybridSearchOptions,
   SearchResult,
+  TimelineOptions,
+  TimelineEntry,
+  TopicGroup,
 } from './interface.js';
 import { ensureSchema } from './schema.js';
 
@@ -20,11 +23,15 @@ export class PostgresStorageBackend implements StorageBackend {
   private pool: Pool;
   private ollamaUrl: string;
   private embeddingModel: string;
+  private openaiApiKey: string | undefined;
+  private openaiModel: string;
 
   constructor(connectionString: string, ollamaUrl: string, embeddingModel: string) {
     this.pool = new Pool({ connectionString });
     this.ollamaUrl = ollamaUrl;
     this.embeddingModel = embeddingModel;
+    this.openaiApiKey = process.env.OPENAI_API_KEY || undefined;
+    this.openaiModel = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large';
   }
 
   /**
@@ -36,9 +43,37 @@ export class PostgresStorageBackend implements StorageBackend {
   }
 
   /**
-   * Generate embedding vector using Ollama
+   * Generate embedding vector using OpenAI (primary) with Ollama fallback
    */
   private async generateEmbedding(text: string): Promise<number[]> {
+    // Try OpenAI first if API key is configured
+    if (this.openaiApiKey) {
+      try {
+        const response = await fetch('https://api.openai.com/v1/embeddings', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.openaiModel,
+            input: text,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+        }
+
+        const data = await response.json() as { data: Array<{ embedding: number[]; index: number }> };
+        return data.data[0].embedding;
+      } catch (error) {
+        console.error('OpenAI embedding failed, falling back to Ollama:', error);
+      }
+    }
+
+    // Fallback to Ollama
     try {
       const response = await fetch(`${this.ollamaUrl}/api/embeddings`, {
         method: 'POST',
@@ -525,6 +560,89 @@ export class PostgresStorageBackend implements StorageBackend {
     const query = `DELETE FROM sessions WHERE id = $1`;
     const result = await this.pool.query(query, [id]);
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Get conversation timeline (cross-source chronological view)
+   */
+  async getTimeline(options?: TimelineOptions): Promise<TimelineEntry[]> {
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (options?.sources && options.sources.length > 0) {
+      conditions.push(`source = ANY($${paramIndex++})`);
+      params.push(options.sources);
+    }
+
+    if (options?.project) {
+      conditions.push(`project = $${paramIndex++}`);
+      params.push(options.project);
+    }
+
+    if (options?.createdAfter) {
+      conditions.push(`created_at >= $${paramIndex++}`);
+      params.push(options.createdAfter);
+    }
+
+    if (options?.createdBefore) {
+      conditions.push(`created_at <= $${paramIndex++}`);
+      params.push(options.createdBefore);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const query = `
+      SELECT id, source, title, project, message_count, topics, created_at, updated_at
+      FROM conversations
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex}
+    `;
+
+    params.push(options?.limit || 50, options?.offset || 0);
+
+    const result = await this.pool.query(query, params);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      source: row.source,
+      title: row.title,
+      project: row.project,
+      messageCount: row.message_count || 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      topics: row.topics || [],
+    }));
+  }
+
+  /**
+   * Get topic groups (conversations grouped by topic, cross-source)
+   */
+  async getTopics(limit: number = 20, minCount: number = 1): Promise<TopicGroup[]> {
+    const query = `
+      SELECT
+        topic,
+        COUNT(DISTINCT c.id) as conversation_count,
+        ARRAY_AGG(DISTINCT c.source) as sources,
+        MAX(c.created_at) as latest_at,
+        MIN(c.created_at) as earliest_at,
+        ARRAY_AGG(DISTINCT c.id ORDER BY c.id) as conversation_ids
+      FROM conversations c,
+           LATERAL unnest(COALESCE(c.topics, ARRAY['Uncategorized'])) AS topic
+      GROUP BY topic
+      HAVING COUNT(DISTINCT c.id) >= $1
+      ORDER BY conversation_count DESC, latest_at DESC
+      LIMIT $2
+    `;
+
+    const result = await this.pool.query(query, [minCount, limit]);
+    return result.rows.map((row: any) => ({
+      topic: row.topic,
+      conversationCount: parseInt(row.conversation_count, 10),
+      sources: row.sources,
+      latestAt: row.latest_at,
+      earliestAt: row.earliest_at,
+      conversationIds: row.conversation_ids,
+    }));
   }
 
   /**

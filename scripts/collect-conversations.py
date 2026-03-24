@@ -18,17 +18,21 @@ from typing import Dict, Iterable, List, Optional
 
 import requests
 
-# Ensure project root is on sys.path when running from scripts/
+# Ensure project root and libs are on sys.path when running from scripts/
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
+LIBS_DIR = os.path.join(ROOT_DIR, "libs")
+for p in (ROOT_DIR, LIBS_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from collectors import (  # noqa: E402
     ChatGPTCollector,
+    ClaudeCodeCollector,
     ClaudeDesktopCollector,
     Conversation,
     CursorCollector,
     DataNormalizer,
+    GeminiCollector,
     Message,
     WindsurfCollector,
 )
@@ -43,10 +47,11 @@ CollectorRegistry = Dict[str, type[ClaudeDesktopCollector]]
 
 COLLECTOR_REGISTRY: CollectorRegistry = {
     "claude-desktop": ClaudeDesktopCollector,
+    "claude-code": ClaudeCodeCollector,
     "chatgpt": ChatGPTCollector,
     "cursor": CursorCollector,
     "windsurf": WindsurfCollector,
-    # claude-code is backed by JSONL and currently covered by module processors
+    "gemini": GeminiCollector,
 }
 
 
@@ -152,12 +157,23 @@ def get_collectors(selected: str) -> List[ClaudeDesktopCollector]:
     return collectors
 
 
+def sanitize_for_json(obj: object) -> object:
+    """Recursively convert datetime objects to ISO strings for JSON serialization."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_for_json(v) for v in obj]
+    return obj
+
+
 def message_to_dict(message: Message) -> Dict:
     return {
         "role": message.role,
         "content": message.content,
         "timestamp": message.timestamp.isoformat() if message.timestamp else None,
-        "metadata": message.metadata or {},
+        "metadata": sanitize_for_json(message.metadata) or {},
     }
 
 
@@ -177,8 +193,8 @@ def conversation_to_payload(conversation: Conversation) -> Dict:
         "source": conversation.source,
         "source_conversation_id": conversation.thread_id or conversation.id,
         "title": conversation.title,
-        "content": content,
-        "metadata": conversation.metadata or {},
+        "content": sanitize_for_json(content),
+        "metadata": sanitize_for_json(conversation.metadata) or {},
     }
 
     if conversation.created_at:

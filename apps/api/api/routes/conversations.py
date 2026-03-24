@@ -31,12 +31,12 @@ async def store_conversation(
     """
     Store a conversation with automatic embedding generation
 
-    - Generates embedding using qwen3-embedding:8b (Ollama)
+    - Generates embedding using OpenAI text-embedding-3-large (Ollama fallback)
     - Stores in PostgreSQL with pgvector
     - Returns stored conversation with ID
     """
     try:
-        raw_payload = conversation.model_dump(mode="python")
+        raw_payload = conversation.model_dump(mode="json")
         raw_metadata = dict(conversation.metadata or {})
 
         workspace_path = (
@@ -78,7 +78,7 @@ async def search_conversations_endpoint(
     """
     Semantic search across conversations
 
-    - Generates query embedding using qwen3-embedding:8b
+    - Generates query embedding using OpenAI text-embedding-3-large (Ollama fallback)
     - Performs vector similarity search with pgvector
     - Returns ranked results by similarity
     """
