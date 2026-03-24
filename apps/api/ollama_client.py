@@ -131,8 +131,8 @@ class EmbeddingClient:
                 # Quick test with minimal input
                 await self._openai_embed(["test"])
                 return True
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("OpenAI health check failed: %s", exc)
 
         # Fallback: check Ollama
         try:

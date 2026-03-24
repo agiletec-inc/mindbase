@@ -113,42 +113,79 @@ class ClaudeDesktopCollector(BaseCollector):
     def _collect_from_session_storage(
         self, storage_path: Path, since_date: Optional[datetime]
     ) -> List[Conversation]:
-        """Collect from LevelDB Session Storage"""
+        """Collect from LevelDB Session Storage.
+
+        Uses plyvel for proper LevelDB reading when available,
+        falls back to binary text extraction from .ldb files.
+        """
         conversations = []
 
+        # Try plyvel first for proper LevelDB access
         try:
-            # LevelDB is complex to parse directly, try alternative approaches
-            # Look for LOG files that might contain conversation data
-            log_files = list(storage_path.glob("*.log"))
-            log_files.extend(list(storage_path.glob("LOG*")))
+            import plyvel
 
-            for log_file in log_files:
-                try:
-                    with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                        # Parse any JSON-like structures in the log
-                        conversations.extend(
-                            self._extract_conversations_from_text(content)
-                        )
-                except Exception as e:
-                    logger.debug(f"Could not read log file {log_file}: {e}")
+            db = plyvel.DB(str(storage_path), create_if_missing=False)
+            try:
+                for key, value in db:
+                    try:
+                        decoded = value.decode("utf-8", errors="replace")
+                        data = json.loads(decoded)
+                        if isinstance(data, dict) and any(
+                            k in data
+                            for k in ["messages", "conversation", "chat", "thread"]
+                        ):
+                            conv = self._parse_json_conversation(data)
+                            if conv:
+                                conversations.append(conv)
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        continue
+            finally:
+                db.close()
 
-            # Try to read .ldb files as text (sometimes contains JSON)
+            if conversations:
+                logger.info(
+                    "Extracted %d conversations from LevelDB via plyvel",
+                    len(conversations),
+                )
+                return conversations
+
+        except ImportError:
+            logger.debug(
+                "plyvel not installed — falling back to binary extraction "
+                "for Session Storage (pip install plyvel for better results)"
+            )
+        except Exception as exc:
+            logger.debug("plyvel failed to open %s: %s", storage_path, exc)
+
+        # Fallback: extract text from binary .ldb files
+        try:
             ldb_files = list(storage_path.glob("*.ldb"))
             for ldb_file in ldb_files:
                 try:
                     with open(ldb_file, "rb") as f:
                         content = f.read()
-                        # Try to extract JSON from binary data
                         text_content = self._extract_text_from_binary(content)
                         conversations.extend(
                             self._extract_conversations_from_text(text_content)
                         )
-                except Exception as e:
-                    logger.debug(f"Could not read LDB file {ldb_file}: {e}")
+                except Exception as exc:
+                    logger.debug("Could not read LDB file %s: %s", ldb_file, exc)
 
-        except Exception as e:
-            logger.warning(f"Error reading Session Storage: {e}")
+            # Also check LOG files
+            log_files = list(storage_path.glob("*.log"))
+            log_files.extend(list(storage_path.glob("LOG*")))
+            for log_file in log_files:
+                try:
+                    with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                        conversations.extend(
+                            self._extract_conversations_from_text(content)
+                        )
+                except Exception as exc:
+                    logger.debug("Could not read log file %s: %s", log_file, exc)
+
+        except Exception as exc:
+            logger.warning("Error reading Session Storage at %s: %s", storage_path, exc)
 
         return conversations
 
@@ -242,8 +279,9 @@ class ClaudeDesktopCollector(BaseCollector):
                                 conv = self._parse_json_conversation(data)
                                 if conv:
                                     conversations.append(conv)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                                self.stats["errors"] += 1
 
                 except Exception as e:
                     logger.debug(f"Could not read ItemTable: {e}")
@@ -290,23 +328,16 @@ class ClaudeDesktopCollector(BaseCollector):
         return conversations
 
     def _extract_text_from_binary(self, binary_data: bytes) -> str:
-        """Extract readable text from binary data"""
-        # Simple extraction of ASCII/UTF-8 strings
-        text_parts = []
-        current_string = []
-
-        for byte in binary_data:
-            if 32 <= byte <= 126:  # Printable ASCII
-                current_string.append(chr(byte))
-            else:
-                if len(current_string) > 10:  # Minimum string length
-                    text_parts.append("".join(current_string))
-                current_string = []
-
-        if current_string:
-            text_parts.append("".join(current_string))
-
-        return " ".join(text_parts)
+        """Extract UTF-8 text segments from binary data."""
+        segments = []
+        for chunk in binary_data.split(b"\x00"):
+            try:
+                text = chunk.decode("utf-8").strip()
+                if len(text) > 10:
+                    segments.append(text)
+            except UnicodeDecodeError:
+                continue
+        return " ".join(segments)
 
     def _extract_conversations_from_text(self, text: str) -> List[Conversation]:
         """Extract conversation data from text content"""
@@ -332,8 +363,8 @@ class ClaudeDesktopCollector(BaseCollector):
                     if conv:
                         conversations.append(conv)
 
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Failed to parse JSON from extracted text: {exc}")
 
         return conversations
 
@@ -373,8 +404,9 @@ class ClaudeDesktopCollector(BaseCollector):
                             if parsed_msg:
                                 messages.append(parsed_msg)
 
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse message data for key {key}: {exc}")
+                        self.stats["errors"] += 1
 
             if not messages:
                 return None

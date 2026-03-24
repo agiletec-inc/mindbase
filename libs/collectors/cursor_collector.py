@@ -330,11 +330,12 @@ class CursorCollector(BaseCollector):
                             conv = self._parse_json_conversation(data)
                             if conv:
                                 conversations.append(conv)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                            self.stats["errors"] += 1
 
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Could not read ItemTable: {exc}")
 
             conn.close()
 
@@ -472,8 +473,9 @@ class CursorCollector(BaseCollector):
                 if isinstance(msg_data, str):
                     try:
                         msg_data = json.loads(msg_data)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse messages JSON: {exc}")
+                        self.stats["errors"] += 1
 
                 if isinstance(msg_data, list):
                     for msg in msg_data:

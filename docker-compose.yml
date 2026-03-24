@@ -73,8 +73,37 @@ services:
       retries: 3
       start_period: 10s
 
+  # CLI - Content generation and publishing
+  cli:
+    build:
+      context: .
+      dockerfile: apps/cli/Dockerfile
+    container_name: mindbase-cli
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-mindbase}:${POSTGRES_PASSWORD:-mindbase_dev}@postgres:${POSTGRES_INTERNAL_PORT:-5432}/${POSTGRES_DB:-mindbase_dev}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-qwen3-embedding:8b}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-large}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+      - NOTE_EMAIL=${NOTE_EMAIL:-}
+      - NOTE_PASSWORD=${NOTE_PASSWORD:-}
+      - QIITA_TOKEN=${QIITA_TOKEN:-}
+      - ZENN_REPO_PATH=${ZENN_REPO_PATH:-}
+      - MINDBASE_API_URL=http://api:8000
+    volumes:
+      - .:/app
+      - node_modules_cli:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - cli
+
 volumes:
   postgres_data_dev:  # 開発データ (削除可能)
     driver: local
   ollama_data_dev:  # 開発データ (削除可能)
+    driver: local
+  node_modules_cli:  # CLI依存 (隔離)
     driver: local

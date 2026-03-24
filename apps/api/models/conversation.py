@@ -8,7 +8,7 @@ import uuid
 
 from pgvector.sqlalchemy import Vector
 
-EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "4096"))
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "3072"))
 from sqlalchemy import (
     ARRAY,
     Column,

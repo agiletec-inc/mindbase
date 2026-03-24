@@ -5,6 +5,9 @@
  */
 
 import type { StorageBackend, ConversationItem, QueryFilters, HybridSearchOptions, TimelineOptions, TopicGroup } from '../storage/interface.js';
+import { ArticleGenerator, type ConversationSource } from '../../../libs/generators/article-generator.js';
+import { OpenAIClient } from '../../../libs/generators/llm-client.js';
+import type { Platform } from '../../../libs/generators/platform-prompts.js';
 
 export class ConversationTools {
   private currentSessionId?: string;
@@ -418,7 +421,7 @@ export class ConversationTools {
   }
 
   /**
-   * content_generate - Generate article draft from conversation data
+   * content_generate - Generate article draft from conversation data using LLM
    */
   async contentGenerate(args: {
     topic: string;
@@ -435,13 +438,11 @@ export class ConversationTools {
     let conversations: ConversationItem[] = [];
 
     if (args.conversationIds && args.conversationIds.length > 0) {
-      // Fetch specified conversations
       for (const id of args.conversationIds) {
         const item = await this.storage.getById(id);
         if (item) conversations.push(item);
       }
     } else {
-      // Search for relevant conversations by topic
       const results = await this.storage.semanticSearch(args.topic, 10, 0.5);
       conversations = results.map((r) => r.item);
     }
@@ -450,118 +451,87 @@ export class ConversationTools {
       throw new Error(`No conversations found for topic: ${args.topic}`);
     }
 
-    // Extract key content from conversations
-    const sourceContent = conversations.map((c) => {
-      const messages = c.content?.messages || [];
-      const keyMessages = messages
+    // Convert to ArticleGenerator format
+    const sources: ConversationSource[] = conversations.map((c) => {
+      const rawMessages = c.content?.messages || [];
+      const messages = rawMessages
         .filter((m: any) => m.role === 'user' || m.role === 'assistant')
-        .slice(0, 20) // Limit to first 20 messages per conversation
-        .map((m: any) => `**${m.role}**: ${typeof m.content === 'string' ? m.content.substring(0, 500) : JSON.stringify(m.content).substring(0, 500)}`);
+        .slice(0, 20)
+        .map((m: any) => ({
+          role: m.role as string,
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        }));
 
       return {
         title: c.title,
         source: c.source,
-        date: c.createdAt instanceof Date ? c.createdAt.toISOString().split('T')[0] : String(c.createdAt).split('T')[0],
-        messages: keyMessages,
+        date: c.createdAt instanceof Date
+          ? c.createdAt.toISOString().split('T')[0]
+          : String(c.createdAt).split('T')[0],
+        messages,
       };
     });
 
-    // Generate platform-specific article structure
-    const article = this.generateArticleStructure(args.topic, args.platform, sourceContent, args.style);
+    // Generate article via LLM
+    const llmClient = new OpenAIClient();
+    const generator = new ArticleGenerator(llmClient);
+    const article = await generator.generate({
+      topic: args.topic,
+      platform: args.platform as Platform,
+      conversations: sources,
+      style: args.style,
+    });
 
     return {
       title: article.title,
       content: article.content,
       platform: args.platform,
       metadata: {
-        sourceConversations: conversations.length,
+        ...article.metadata,
         sourceIds: conversations.map((c) => c.id),
-        generatedAt: new Date().toISOString(),
         style: args.style || 'technical',
       },
     };
   }
 
   /**
-   * Generate article structure based on platform conventions
+   * content_publish - Publish article to target platform
    */
-  private generateArticleStructure(
-    topic: string,
-    platform: 'qiita' | 'zenn' | 'note',
-    sources: any[],
-    style?: string
-  ): { title: string; content: string } {
-    const conversationSummary = sources
-      .map((s) => `### ${s.title} (${s.source}, ${s.date})\n\n${s.messages.join('\n\n')}`)
-      .join('\n\n---\n\n');
+  async contentPublish(args: {
+    content: string;
+    platform: 'qiita' | 'zenn' | 'note';
+    title: string;
+    tags?: string[];
+    draft?: boolean;
+  }): Promise<{
+    success: boolean;
+    platform: string;
+    method: string;
+    url?: string;
+    filePath?: string;
+    error?: string;
+  }> {
+    // Dynamic import to avoid loading publisher deps at startup
+    const { getPublisher } = await import('../../../libs/generators/publishers/index.js');
 
-    switch (platform) {
-      case 'qiita': {
-        const title = `${topic}`;
-        const content = `---
-title: "${topic}"
-tags:
-  - name: "AI"
-  - name: "LLM"
-  - name: "開発"
-private: true
----
+    const publisher = getPublisher(args.platform);
+    const result = await publisher.publish(
+      {
+        title: args.title,
+        content: args.content,
+        tags: args.tags || [],
+      },
+      { draft: args.draft ?? true }
+    );
 
-## はじめに
-
-<!-- この記事は MindBase の会話データから自動生成されたドラフトです -->
-<!-- ${sources.length}件の会話から構成 -->
-
-## 背景
-
-<!-- 以下の会話内容を元にセクションを構成してください -->
-
-${conversationSummary}
-
-## まとめ
-
-<!-- 上記の会話内容をまとめてください -->
-`;
-        return { title, content };
-      }
-
-      case 'zenn': {
-        const title = `${topic}`;
-        const content = `---
-title: "${topic}"
-emoji: "🤖"
-type: "tech"
-topics: ["AI", "LLM", "開発"]
-published: false
----
-
-## はじめに
-
-<!-- MindBase 自動生成ドラフト: ${sources.length}件の会話から -->
-
-${conversationSummary}
-
-## まとめ
-`;
-        return { title, content };
-      }
-
-      case 'note': {
-        const title = `${topic}`;
-        const content = `# ${topic}
-
-<!-- MindBase 自動生成ドラフト: ${sources.length}件の会話から -->
-<!-- Note向け: ストーリー性を重視した構成にしてください -->
-
-${conversationSummary}
-
----
-
-*この記事は複数のAI会話から自動的にドラフトが生成されました。*
-`;
-        return { title, content };
-      }
-    }
+    return {
+      success: result.success,
+      platform: args.platform,
+      method: result.method,
+      url: result.url,
+      filePath: result.filePath,
+      error: result.error,
+    };
   }
 
   /**

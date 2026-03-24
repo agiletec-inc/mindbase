@@ -406,6 +406,38 @@ const TOOLS: Tool[] = [
       required: ['topic', 'platform'],
     },
   },
+  {
+    name: 'content_publish',
+    description: 'Publish generated article to target platform (note.com, Qiita, or Zenn)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description: 'Article content in markdown',
+        },
+        platform: {
+          type: 'string',
+          enum: ['qiita', 'zenn', 'note'],
+          description: 'Target publishing platform',
+        },
+        title: {
+          type: 'string',
+          description: 'Article title',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Article tags/topics',
+        },
+        draft: {
+          type: 'boolean',
+          description: 'Publish as draft (default: true)',
+        },
+      },
+      required: ['content', 'platform', 'title'],
+    },
+  },
   // Memory Management Tools (Serena-inspired)
   {
     name: 'memory_write',
@@ -625,6 +657,10 @@ class MindBaseMCPServer {
 
           case 'content_generate':
             result = await this.tools.contentGenerate(args as any);
+            break;
+
+          case 'content_publish':
+            result = await this.tools.contentPublish(args as any);
             break;
 
           case 'session_create':

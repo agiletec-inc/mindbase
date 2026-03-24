@@ -196,8 +196,9 @@ class WindsurfCollector(BaseCollector):
                             conv = self._parse_json_conversation(data)
                             if conv:
                                 conversations.append(conv)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                            self.stats["errors"] += 1
 
             except Exception as e:
                 logger.debug(f"ItemTable not found or error: {e}")
@@ -247,49 +248,84 @@ class WindsurfCollector(BaseCollector):
         return conversations
 
     def _parse_cascade_chat_sessions(self, data: Dict[str, Any]) -> List[Conversation]:
-        """Parse Windsurf Cascade chat sessions"""
+        """Parse Windsurf Cascade chat sessions.
+
+        Handles multiple data structures:
+        - ChatSessionStore: {"version": N, "entries": {id: {messages, ...}}}
+        - Conversation items: {"conversationItems": [...]}
+        - Bubbles format: {"bubbles": [...]}
+        """
         conversations = []
 
         try:
-            # ChatSessionStore structure: {"version": 1, "entries": {...}}
+            # Primary: ChatSessionStore with entries dict
             entries = data.get("entries", {})
+            if isinstance(entries, dict):
+                for session_id, session_data in entries.items():
+                    if not isinstance(session_data, dict):
+                        continue
+                    conv = self._extract_session_conversation(session_id, session_data)
+                    if conv:
+                        conversations.append(conv)
 
-            for session_id, session_data in entries.items():
-                messages = []
+            # Alternative: flat list of sessions
+            if not conversations and isinstance(data.get("sessions"), list):
+                for i, session_data in enumerate(data["sessions"]):
+                    if not isinstance(session_data, dict):
+                        continue
+                    session_id = session_data.get("id", f"session_{i}")
+                    conv = self._extract_session_conversation(session_id, session_data)
+                    if conv:
+                        conversations.append(conv)
 
-                # Extract messages from session
-                if "messages" in session_data:
-                    for msg_data in session_data["messages"]:
-                        msg = self._parse_message(msg_data)
-                        if msg:
-                            messages.append(msg)
-
-                if messages:
-                    created_at = self.normalize_timestamp(
-                        session_data.get("createdAt", datetime.now(timezone.utc))
-                    )
-
-                    conv = Conversation(
-                        id=f"windsurf_cascade_{session_id}",
-                        source=self.source_name,
-                        title=session_data.get("title")
-                        or self.extract_title({"messages": messages}),
-                        messages=messages,
-                        created_at=created_at,
-                        updated_at=self.normalize_timestamp(
-                            session_data.get("updatedAt", created_at)
-                        ),
-                        metadata={
-                            "session_id": session_id,
-                            "session_type": "cascade_chat",
-                        },
-                    )
-                    conversations.append(conv)
-
-        except Exception as e:
-            logger.debug(f"Error parsing Cascade chat sessions: {e}")
+        except Exception as exc:
+            logger.warning("Error parsing Cascade chat sessions: %s", exc)
 
         return conversations
+
+    def _extract_session_conversation(
+        self, session_id: str, session_data: Dict[str, Any]
+    ) -> Optional[Conversation]:
+        """Extract a single conversation from session data."""
+        messages: List[Message] = []
+
+        # Try multiple message field names
+        for field in ["messages", "conversationItems", "bubbles", "interactions"]:
+            msg_list = session_data.get(field)
+            if isinstance(msg_list, list):
+                for msg_data in msg_list:
+                    msg = self._parse_message(msg_data)
+                    if msg:
+                        messages.append(msg)
+                break
+
+        if not messages:
+            return None
+
+        created_at = self.normalize_timestamp(
+            session_data.get("createdAt")
+            or session_data.get("created_at")
+            or session_data.get("timestamp")
+            or datetime.now(timezone.utc)
+        )
+
+        return Conversation(
+            id=f"windsurf_cascade_{session_id}",
+            source=self.source_name,
+            title=session_data.get("title")
+            or self.extract_title({"messages": messages}),
+            messages=messages,
+            created_at=created_at,
+            updated_at=self.normalize_timestamp(
+                session_data.get("updatedAt")
+                or session_data.get("updated_at")
+                or created_at
+            ),
+            metadata={
+                "session_id": session_id,
+                "session_type": "cascade_chat",
+            },
+        )
 
     def _parse_cascade_view_state(self, data: Dict[str, Any]) -> List[Conversation]:
         """Parse Windsurf Cascade view state"""
