@@ -15,7 +15,11 @@ class Settings(BaseSettings):
     # Database - REQUIRED from environment
     DATABASE_URL: str
 
-    # Ollama - REQUIRED from environment
+    # OpenAI Embedding (primary)
+    OPENAI_API_KEY: str | None = None
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-large"
+
+    # Ollama Embedding (fallback)
     OLLAMA_URL: str
     EMBEDDING_MODEL: str
     EMBEDDING_DIMENSIONS: int

@@ -7,7 +7,7 @@
 export interface ConversationItem {
   id: string;
   sessionId?: string;
-  source: 'claude-code' | 'claude-desktop' | 'chatgpt' | 'cursor' | 'windsurf';
+  source: 'claude-code' | 'claude-desktop' | 'chatgpt' | 'cursor' | 'windsurf' | 'gemini';
   title: string;
   content: any;
   metadata: Record<string, any>;
@@ -94,6 +94,39 @@ export interface StorageBackend {
   listSessions(limit?: number): Promise<Session[]>;
   deleteSession(id: string): Promise<boolean>;
 
+  // Timeline & topic queries
+  getTimeline(options?: TimelineOptions): Promise<TimelineEntry[]>;
+  getTopics(limit?: number, minCount?: number): Promise<TopicGroup[]>;
+
   // Utility
   close(): Promise<void>;
+}
+
+export interface TimelineOptions {
+  sources?: string[];
+  createdAfter?: Date;
+  createdBefore?: Date;
+  limit?: number;
+  offset?: number;
+  project?: string;
+}
+
+export interface TimelineEntry {
+  id: string;
+  source: string;
+  title: string;
+  project?: string;
+  messageCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  topics?: string[];
+}
+
+export interface TopicGroup {
+  topic: string;
+  conversationCount: number;
+  sources: string[];
+  latestAt: Date;
+  earliestAt: Date;
+  conversationIds: string[];
 }

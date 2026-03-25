@@ -30,15 +30,15 @@ These files are generated from `manifest.toml` via `airis init`:
 
 ### 3. Docker-First Development
 
-Host package manager commands are forbidden. Use `make` or `airis` commands:
+Host package manager commands are forbidden. Use `airis` commands:
 
 ```bash
 # ❌ FORBIDDEN on host
 npm install / pnpm install / yarn install
 
 # ✅ USE INSTEAD
-make up              # Start services
-make api-shell       # Enter container, then run commands inside
+airis up              # Start services
+airis api-shell       # Enter container, then run commands inside
 ```
 
 ---
@@ -50,8 +50,8 @@ make api-shell       # Enter container, then run commands inside
 **Key Integration**: Part of [AIRIS MCP Gateway](https://github.com/agiletec-inc/airis-mcp-gateway) which provides unified MCP access. MindBase exposes `mindbase_search` and `mindbase_store` tools.
 
 **Stack**: Hybrid Python/TypeScript pnpm monorepo
-- **Storage**: PostgreSQL 17 + pgvector (1024-dim vectors)
-- **Embeddings**: Ollama with qwen3-embedding:8b (local, free)
+- **Storage**: PostgreSQL 17 + pgvector
+- **Embeddings**: OpenAI text-embedding-3-large (3072-dim, primary) → Ollama qwen3-embedding:8b (1024-dim, fallback)
 - **API**: FastAPI (Python)
 - **MCP Server**: TypeScript (stdio transport)
 
@@ -61,27 +61,27 @@ make api-shell       # Enter container, then run commands inside
 
 ```bash
 cp .env.example .env          # Configure environment
-make up                       # Start PostgreSQL + API + Ollama
-make model-pull               # Download embedding model (~4.7GB, first time only)
-make migrate                  # Run database migrations
-make health                   # Verify all services running
+airis up                      # Start PostgreSQL + API
+airis model-pull              # Download embedding model (~4.7GB, first time only)
+airis migrate                 # Run database migrations
+airis health                  # Verify all services running
 ```
 
 ### Common Commands
 
-| Make Command | AIRIS Equivalent | Description |
-|--------------|------------------|-------------|
-| `make up` | `airis up` | Start all services |
-| `make down` | `airis down` | Stop all services |
-| `make logs` | `airis logs` | View all logs |
-| `make api-shell` | - | Enter API container for Python work |
-| `make db-shell` | - | Enter PostgreSQL shell |
-| `make test` | `airis test` | Run all tests |
-| `make test-unit` | - | Run unit tests only |
-| `make test-integration` | - | Run integration tests |
-| `make test-cov` | - | Tests with coverage report |
-
-**Note**: `airis` commands are preferred when available. Use `make` for Python/database-specific tasks.
+| Command | Description |
+|---------|-------------|
+| `airis up` | Start all services |
+| `airis down` | Stop all services |
+| `airis restart` | Restart all services |
+| `airis logs` | View all logs |
+| `airis ps` | Show container status |
+| `airis api-shell` | Enter API container for Python work |
+| `airis db-shell` | Enter PostgreSQL shell |
+| `airis test` | Run all tests |
+| `airis health` | Check service health |
+| `airis migrate` | Run database migrations |
+| `airis model-pull` | Download embedding model |
 
 ### Service Endpoints (configured via .env)
 
@@ -95,37 +95,27 @@ make health                   # Verify all services running
 ```
 apps/
 ├── api/              # FastAPI backend (Python) - main entry: main.py
+├── cli/              # CLI tool (TypeScript) - content generation pipeline
 ├── mcp-server/       # MCP Server (TypeScript) - main entry: index.ts
 ├── settings/         # Settings UI (React + Vite + Tailwind)
 └── menubar-swift/    # Native macOS menubar app with auto-collection
 
 libs/
 ├── collectors/       # Python conversation collectors (Claude, Cursor, ChatGPT, etc.)
+├── generators/       # TypeScript article generators (Qiita, Zenn, Note publishing)
 ├── processors/       # TypeScript content processors
-└── generators/       # TypeScript article generators
+└── shared/           # Shared TypeScript types
 
-supabase/migrations/  # PostgreSQL migrations (will move to packages/database/)
+supabase/migrations/  # PostgreSQL migrations (sequential SQL files)
 tests/                # pytest tests (unit/integration/e2e markers)
 ```
 
-### Key Files
+### Key Entry Points
 
-**Python API (`apps/api/`)**:
-- `main.py` - FastAPI app with CORS, route registration
-- `config.py` - Pydantic settings from environment
-- `database.py` - SQLAlchemy async engine with pgvector
-- `ollama_client.py` - Embedding client (qwen3-embedding:8b, 1024-dim)
-
-**MCP Server (`apps/mcp-server/`)**:
-- `index.ts` - MCP entry point (stdio transport)
-- `storage/postgres.ts` - Conversation storage backend
-- `storage/memory-fs.ts` - Markdown memory storage (Serena-inspired)
-- `tools/conversation.ts` - conversation_save, conversation_get, conversation_search, conversation_delete
-- `tools/memory.ts` - memory_write, memory_read, memory_list, memory_search, memory_delete
-
-**Collectors (`libs/collectors/`)**:
-- `base_collector.py` - Abstract base with `Conversation` and `Message` dataclasses
-- Source-specific: `claude_collector.py`, `cursor_collector.py`, `chatgpt_collector.py`, etc.
+- **API**: `apps/api/main.py` → routes in `apps/api/api/routes/`
+- **MCP Server**: `apps/mcp-server/index.ts` → tools in `tools/`, storage in `storage/`
+- **CLI**: `apps/cli/index.ts` → uses `libs/generators/` for article generation
+- **Collectors**: `libs/collectors/base_collector.py` (abstract) → source-specific implementations
 
 ## Architecture Notes
 
@@ -146,11 +136,47 @@ tests/                # pytest tests (unit/integration/e2e markers)
 - **Error handling**: All tools return `{error: message}` on failure (no exceptions to client)
 - **Hybrid memory**: Markdown files (human-readable) + PostgreSQL (semantic search)
 
-### Embedding Model
+### Embedding Strategy (Dual Provider)
 
-- **Model**: qwen3-embedding:8b via Ollama
-- **Dimensions**: 1024 (auto-detected, can override via EMBEDDING_DIMENSIONS)
-- **Index**: ivfflat for pgvector similarity search
+- **Primary**: OpenAI `text-embedding-3-large` (3072-dim) — requires `OPENAI_API_KEY`
+- **Fallback**: Ollama `qwen3-embedding:8b` (1024-dim) — local, free
+- Both Python (`ollama_client.py`) and TypeScript (`storage/postgres.ts`) implement the same fallback logic
+- Dimensions auto-detected; override with `EMBEDDING_DIMENSIONS`
+- Index: ivfflat for pgvector similarity search
+
+### Data Pipeline (Raw → Derived)
+
+1. `conversation_save` (MCP) or `POST /conversations/store` (API) receives raw data
+2. `RawConversation` stored append-only (immutable payload)
+3. Deriver (`services/deriver.py`) processes: embedding generation, topic extraction, metadata enrichment
+4. `Conversation` created with vector embedding for semantic search
+5. `DERIVE_ON_STORE=true` (default) triggers derivation immediately; otherwise background worker processes
+
+### Hybrid Search
+
+Three scoring components combined with auto-normalized weights:
+- **Keyword**: PostgreSQL full-text search (`ts_rank`)
+- **Semantic**: pgvector cosine similarity on embedding vectors
+- **Recency**: Exponential decay `exp(-age / tau)` with boost for recent items
+
+Tuning via env vars: `SEARCH_RECENCY_TAU_SECONDS` (14d default), `SEARCH_RECENCY_WEIGHT` (0.15), `SEARCH_RECENCY_BOOST_DAYS` (3), `SEARCH_RECENCY_BOOST_VALUE` (0.05)
+
+### Content Generation Pipeline
+
+会話データから記事を生成し、プラットフォームに公開:
+
+1. `apps/cli/` - CLI エントリポイント (`mindbase` コマンド)
+2. `libs/generators/article-generator.ts` - LLM (OpenAI) で記事生成
+3. `libs/generators/platform-prompts.ts` - プラットフォーム固有プロンプト
+4. `libs/generators/publishers/` - Qiita, Zenn, Note パブリッシャー
+
+実行: `docker compose run --rm cli pnpm generate` / `pnpm publish`
+
+### CI/CD
+
+- Push to `next` or PR to `main` で CI 実行 (pnpm install → test → build)
+- `next` → `main` はCI成功時に自動マージ
+- ワークフロー: `.github/workflows/ci.yml` (auto-generated from manifest.toml)
 
 ## Development Conventions
 
@@ -174,7 +200,7 @@ tests/                # pytest tests (unit/integration/e2e markers)
 ### Testing
 
 ```bash
-# Inside Docker container (make api-shell)
+# Inside Docker container (airis api-shell)
 pytest tests/ -v                          # All tests
 pytest -m unit -v                         # Unit tests only
 pytest -m integration -v                  # Integration tests
@@ -185,6 +211,9 @@ pytest tests/ -k "test_embedding" -v      # Pattern match
 black apps/api/ libs/collectors/          # Format
 ruff check apps/api/ libs/collectors/     # Lint
 mypy apps/api/ libs/collectors/           # Type check
+
+# TypeScript
+airis typecheck
 ```
 
 ## Common Tasks
@@ -203,9 +232,9 @@ mypy apps/api/ libs/collectors/           # Type check
 
 ## Troubleshooting
 
-**"Ollama model not found"**: `make model-pull`
+**"Ollama model not found"**: `airis model-pull`
 
-**"Database connection refused"**: `make health` then `make restart`
+**"Database connection refused"**: `airis health` then `airis restart`
 
 **"Permission denied for Application Support"**:
 ```bash

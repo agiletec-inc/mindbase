@@ -13,6 +13,9 @@ import type {
   QueryFilters,
   HybridSearchOptions,
   SearchResult,
+  TimelineOptions,
+  TimelineEntry,
+  TopicGroup,
 } from './interface.js';
 import { ensureSchema } from './schema.js';
 
@@ -20,11 +23,15 @@ export class PostgresStorageBackend implements StorageBackend {
   private pool: Pool;
   private ollamaUrl: string;
   private embeddingModel: string;
+  private openaiApiKey: string | undefined;
+  private openaiModel: string;
 
   constructor(connectionString: string, ollamaUrl: string, embeddingModel: string) {
     this.pool = new Pool({ connectionString });
     this.ollamaUrl = ollamaUrl;
     this.embeddingModel = embeddingModel;
+    this.openaiApiKey = process.env.OPENAI_API_KEY || undefined;
+    this.openaiModel = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large';
   }
 
   /**
@@ -36,9 +43,37 @@ export class PostgresStorageBackend implements StorageBackend {
   }
 
   /**
-   * Generate embedding vector using Ollama
+   * Generate embedding vector using OpenAI (primary) with Ollama fallback
    */
   private async generateEmbedding(text: string): Promise<number[]> {
+    // Try OpenAI first if API key is configured
+    if (this.openaiApiKey) {
+      try {
+        const response = await fetch('https://api.openai.com/v1/embeddings', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.openaiModel,
+            input: text,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+        }
+
+        const data = await response.json() as { data: Array<{ embedding: number[]; index: number }> };
+        return data.data[0].embedding;
+      } catch (error) {
+        console.error('OpenAI embedding failed, falling back to Ollama:', error);
+      }
+    }
+
+    // Fallback to Ollama
     try {
       const response = await fetch(`${this.ollamaUrl}/api/embeddings`, {
         method: 'POST',
@@ -65,179 +100,204 @@ export class PostgresStorageBackend implements StorageBackend {
    * Save conversation item with automatic embedding generation
    */
   async save(item: ConversationItem): Promise<string> {
-    const id = item.id || uuidv4();
+    try {
+      const id = item.id || uuidv4();
 
-    // Generate embedding if not provided
-    let embedding = item.embedding;
-    if (!embedding && item.content) {
-      const text = JSON.stringify(item.content);
-      embedding = await this.generateEmbedding(text);
+      // Generate embedding if not provided
+      let embedding = item.embedding;
+      if (!embedding && item.content) {
+        const text = JSON.stringify(item.content);
+        embedding = await this.generateEmbedding(text);
+      }
+
+      const query = `
+        INSERT INTO conversations
+        (id, session_id, source, title, content, metadata, category, priority, channel, embedding, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (id) DO UPDATE SET
+          session_id = EXCLUDED.session_id,
+          title = EXCLUDED.title,
+          content = EXCLUDED.content,
+          metadata = EXCLUDED.metadata,
+          category = EXCLUDED.category,
+          priority = EXCLUDED.priority,
+          channel = EXCLUDED.channel,
+          embedding = EXCLUDED.embedding,
+          updated_at = EXCLUDED.updated_at
+        RETURNING id
+      `;
+
+      const now = new Date();
+      const result = await this.pool.query(query, [
+        id,
+        item.sessionId || null,
+        item.source,
+        item.title,
+        JSON.stringify(item.content),
+        JSON.stringify(item.metadata),
+        item.category || null,
+        item.priority || null,
+        item.channel || null,
+        embedding ? `[${embedding.join(',')}]` : null,
+        item.createdAt || now,
+        now,
+      ]);
+
+      return result.rows[0].id;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to save conversation: ${msg}`);
     }
-
-    const query = `
-      INSERT INTO conversations
-      (id, session_id, source, title, content, metadata, category, priority, channel, embedding, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      ON CONFLICT (id) DO UPDATE SET
-        session_id = EXCLUDED.session_id,
-        title = EXCLUDED.title,
-        content = EXCLUDED.content,
-        metadata = EXCLUDED.metadata,
-        category = EXCLUDED.category,
-        priority = EXCLUDED.priority,
-        channel = EXCLUDED.channel,
-        embedding = EXCLUDED.embedding,
-        updated_at = EXCLUDED.updated_at
-      RETURNING id
-    `;
-
-    const now = new Date();
-    const result = await this.pool.query(query, [
-      id,
-      item.sessionId || null,
-      item.source,
-      item.title,
-      JSON.stringify(item.content),
-      JSON.stringify(item.metadata),
-      item.category || null,
-      item.priority || null,
-      item.channel || null,
-      embedding ? `[${embedding.join(',')}]` : null,
-      item.createdAt || now,
-      now,
-    ]);
-
-    return result.rows[0].id;
   }
 
   /**
    * Get conversation items with filters and pagination
    */
   async get(filters: QueryFilters): Promise<ConversationItem[]> {
-    const conditions: string[] = [];
-    const params: any[] = [];
-    let paramIndex = 1;
+    try {
+      const conditions: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    if (filters.source) {
-      conditions.push(`source = $${paramIndex++}`);
-      params.push(filters.source);
+      if (filters.source) {
+        conditions.push(`source = $${paramIndex++}`);
+        params.push(filters.source);
+      }
+
+      if (filters.category) {
+        conditions.push(`category = $${paramIndex++}`);
+        params.push(filters.category);
+      }
+
+      if (filters.priority) {
+        conditions.push(`priority = $${paramIndex++}`);
+        params.push(filters.priority);
+      }
+
+      if (filters.sessionId) {
+        conditions.push(`session_id = $${paramIndex++}`);
+        params.push(filters.sessionId);
+      }
+
+      if (filters.channel) {
+        conditions.push(`channel = $${paramIndex++}`);
+        params.push(filters.channel);
+      }
+
+      if (filters.createdAfter) {
+        conditions.push(`created_at >= $${paramIndex++}`);
+        params.push(filters.createdAfter);
+      }
+
+      if (filters.createdBefore) {
+        conditions.push(`created_at <= $${paramIndex++}`);
+        params.push(filters.createdBefore);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      const query = `
+        SELECT * FROM conversations
+        ${whereClause}
+        ORDER BY created_at DESC
+        LIMIT $${paramIndex++} OFFSET $${paramIndex}
+      `;
+
+      params.push(filters.limit || 100, filters.offset || 0);
+
+      const result = await this.pool.query(query, params);
+      return result.rows.map(this.mapRowToItem);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get conversations: ${msg}`);
     }
-
-    if (filters.category) {
-      conditions.push(`category = $${paramIndex++}`);
-      params.push(filters.category);
-    }
-
-    if (filters.priority) {
-      conditions.push(`priority = $${paramIndex++}`);
-      params.push(filters.priority);
-    }
-
-    if (filters.sessionId) {
-      conditions.push(`session_id = $${paramIndex++}`);
-      params.push(filters.sessionId);
-    }
-
-    if (filters.channel) {
-      conditions.push(`channel = $${paramIndex++}`);
-      params.push(filters.channel);
-    }
-
-    if (filters.createdAfter) {
-      conditions.push(`created_at >= $${paramIndex++}`);
-      params.push(filters.createdAfter);
-    }
-
-    if (filters.createdBefore) {
-      conditions.push(`created_at <= $${paramIndex++}`);
-      params.push(filters.createdBefore);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const query = `
-      SELECT * FROM conversations
-      ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT $${paramIndex++} OFFSET $${paramIndex}
-    `;
-
-    params.push(filters.limit || 100, filters.offset || 0);
-
-    const result = await this.pool.query(query, params);
-    return result.rows.map(this.mapRowToItem);
   }
 
   /**
    * Get conversation item by ID
    */
   async getById(id: string): Promise<ConversationItem | null> {
-    const query = `SELECT * FROM conversations WHERE id = $1`;
-    const result = await this.pool.query(query, [id]);
+    try {
+      const query = `SELECT * FROM conversations WHERE id = $1`;
+      const result = await this.pool.query(query, [id]);
 
-    if (result.rows.length === 0) {
-      return null;
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return this.mapRowToItem(result.rows[0]);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get conversation by ID: ${msg}`);
     }
-
-    return this.mapRowToItem(result.rows[0]);
   }
 
   /**
    * Delete conversation item
    */
   async delete(id: string): Promise<boolean> {
-    const query = `DELETE FROM conversations WHERE id = $1`;
-    const result = await this.pool.query(query, [id]);
-    return result.rowCount !== null && result.rowCount > 0;
+    try {
+      const query = `DELETE FROM conversations WHERE id = $1`;
+      const result = await this.pool.query(query, [id]);
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to delete conversation: ${msg}`);
+    }
   }
 
   /**
    * Count conversations matching filters
    */
   async count(filters: Omit<QueryFilters, 'limit' | 'offset'>): Promise<number> {
-    const conditions: string[] = [];
-    const params: any[] = [];
-    let paramIndex = 1;
+    try {
+      const conditions: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    if (filters.source) {
-      conditions.push(`source = $${paramIndex++}`);
-      params.push(filters.source);
+      if (filters.source) {
+        conditions.push(`source = $${paramIndex++}`);
+        params.push(filters.source);
+      }
+
+      if (filters.category) {
+        conditions.push(`category = $${paramIndex++}`);
+        params.push(filters.category);
+      }
+
+      if (filters.priority) {
+        conditions.push(`priority = $${paramIndex++}`);
+        params.push(filters.priority);
+      }
+
+      if (filters.sessionId) {
+        conditions.push(`session_id = $${paramIndex++}`);
+        params.push(filters.sessionId);
+      }
+
+      if (filters.channel) {
+        conditions.push(`channel = $${paramIndex++}`);
+        params.push(filters.channel);
+      }
+
+      if (filters.createdAfter) {
+        conditions.push(`created_at >= $${paramIndex++}`);
+        params.push(filters.createdAfter);
+      }
+
+      if (filters.createdBefore) {
+        conditions.push(`created_at <= $${paramIndex++}`);
+        params.push(filters.createdBefore);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      const query = `SELECT COUNT(*) as count FROM conversations ${whereClause}`;
+
+      const result = await this.pool.query(query, params);
+      return parseInt(result.rows[0].count, 10);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to count conversations: ${msg}`);
     }
-
-    if (filters.category) {
-      conditions.push(`category = $${paramIndex++}`);
-      params.push(filters.category);
-    }
-
-    if (filters.priority) {
-      conditions.push(`priority = $${paramIndex++}`);
-      params.push(filters.priority);
-    }
-
-    if (filters.sessionId) {
-      conditions.push(`session_id = $${paramIndex++}`);
-      params.push(filters.sessionId);
-    }
-
-    if (filters.channel) {
-      conditions.push(`channel = $${paramIndex++}`);
-      params.push(filters.channel);
-    }
-
-    if (filters.createdAfter) {
-      conditions.push(`created_at >= $${paramIndex++}`);
-      params.push(filters.createdAfter);
-    }
-
-    if (filters.createdBefore) {
-      conditions.push(`created_at <= $${paramIndex++}`);
-      params.push(filters.createdBefore);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const query = `SELECT COUNT(*) as count FROM conversations ${whereClause}`;
-
-    const result = await this.pool.query(query, params);
-    return parseInt(result.rows[0].count, 10);
   }
 
   /**
@@ -269,71 +329,76 @@ export class PostgresStorageBackend implements StorageBackend {
     recencyBoostDays: number = 3,
     recencyBoostValue: number = 0.05
   ): Promise<SearchResult[]> {
-    // Generate query embedding
-    const queryEmbedding = await this.generateEmbedding(query);
+    try {
+      // Generate query embedding
+      const queryEmbedding = await this.generateEmbedding(query);
 
-    // Validate and normalize weights (prevent division by zero)
-    let semanticW = 1 - recencyWeight;
-    let recencyW = recencyWeight;
-    const sum = semanticW + recencyW;
-    if (sum <= 0) {
-      // Fallback to defaults
-      semanticW = 1 - PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
-      recencyW = PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
-    } else {
-      semanticW /= sum;
-      recencyW /= sum;
+      // Validate and normalize weights (prevent division by zero)
+      let semanticW = 1 - recencyWeight;
+      let recencyW = recencyWeight;
+      const sum = semanticW + recencyW;
+      if (sum <= 0) {
+        // Fallback to defaults
+        semanticW = 1 - PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
+        recencyW = PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
+      } else {
+        semanticW /= sum;
+        recencyW /= sum;
+      }
+
+      // Validate recency parameters (prevent division by zero / negative)
+      const safeTauSeconds = Math.max(1, recencyTauSeconds);
+      const safeBoostDays = Math.max(0, recencyBoostDays);
+      const safeBoostValue = Math.max(0, Math.min(1, recencyBoostValue));
+
+      // SQL uses GREATEST(0, 1 - distance) to clamp cosine similarity to [0, 1]
+      // pgvector's <=> returns distance (0-2 for cosine), so 1-distance can be negative
+      const sqlQuery = `
+        SELECT
+          c.*,
+          GREATEST(0, 1 - (c.embedding <=> $1::vector)) AS semantic_score,
+          LEAST(
+            1.0,
+            EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
+            + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
+          ) AS recency_score,
+          (
+            GREATEST(0, 1 - (c.embedding <=> $1::vector)) * $7
+            + LEAST(
+                1.0,
+                EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
+                + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
+              ) * $8
+          ) AS combined_score
+        FROM conversations c
+        WHERE c.embedding IS NOT NULL
+          AND GREATEST(0, 1 - (c.embedding <=> $1::vector)) > $2
+        ORDER BY combined_score DESC
+        LIMIT $3
+      `;
+
+      const result = await this.pool.query(sqlQuery, [
+        `[${queryEmbedding.join(',')}]`, // $1: embedding
+        threshold,                        // $2: threshold
+        limit,                            // $3: limit
+        safeTauSeconds,                   // $4: decay constant (tau)
+        safeBoostDays,                    // $5: boost window
+        safeBoostValue,                   // $6: boost value
+        semanticW,                        // $7: semantic weight
+        recencyW,                         // $8: recency weight
+      ]);
+
+      return result.rows.map((row) => ({
+        item: this.mapRowToItem(row),
+        similarity: row.semantic_score,
+        semanticScore: row.semantic_score,
+        recencyScore: row.recency_score,
+        combinedScore: row.combined_score,
+      }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to perform semantic search: ${msg}`);
     }
-
-    // Validate recency parameters (prevent division by zero / negative)
-    const safeTauSeconds = Math.max(1, recencyTauSeconds);
-    const safeBoostDays = Math.max(0, recencyBoostDays);
-    const safeBoostValue = Math.max(0, Math.min(1, recencyBoostValue));
-
-    // SQL uses GREATEST(0, 1 - distance) to clamp cosine similarity to [0, 1]
-    // pgvector's <=> returns distance (0-2 for cosine), so 1-distance can be negative
-    const sqlQuery = `
-      SELECT
-        c.*,
-        GREATEST(0, 1 - (c.embedding <=> $1::vector)) AS semantic_score,
-        LEAST(
-          1.0,
-          EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
-          + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
-        ) AS recency_score,
-        (
-          GREATEST(0, 1 - (c.embedding <=> $1::vector)) * $7
-          + LEAST(
-              1.0,
-              EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
-              + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
-            ) * $8
-        ) AS combined_score
-      FROM conversations c
-      WHERE c.embedding IS NOT NULL
-        AND GREATEST(0, 1 - (c.embedding <=> $1::vector)) > $2
-      ORDER BY combined_score DESC
-      LIMIT $3
-    `;
-
-    const result = await this.pool.query(sqlQuery, [
-      `[${queryEmbedding.join(',')}]`, // $1: embedding
-      threshold,                        // $2: threshold
-      limit,                            // $3: limit
-      safeTauSeconds,                   // $4: decay constant (tau)
-      safeBoostDays,                    // $5: boost window
-      safeBoostValue,                   // $6: boost value
-      semanticW,                        // $7: semantic weight
-      recencyW,                         // $8: recency weight
-    ]);
-
-    return result.rows.map((row) => ({
-      item: this.mapRowToItem(row),
-      similarity: row.semantic_score,
-      semanticScore: row.semantic_score,
-      recencyScore: row.recency_score,
-      combinedScore: row.combined_score,
-    }));
   }
 
   /**
@@ -346,185 +411,303 @@ export class PostgresStorageBackend implements StorageBackend {
    * - weights: auto-normalized to sum to 1.0 (falls back to defaults if sum <= 0)
    */
   async hybridSearch(query: string, options?: HybridSearchOptions): Promise<SearchResult[]> {
-    // Default weights (will be normalized)
-    let keywordWeight = options?.keywordWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.keyword;
-    let semanticWeight = options?.semanticWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.semantic;
-    let recencyWeight = options?.recencyWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
-    const threshold = options?.threshold ?? 0.6;
-    const limit = options?.limit ?? 10;
+    try {
+      // Default weights (will be normalized)
+      let keywordWeight = options?.keywordWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.keyword;
+      let semanticWeight = options?.semanticWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.semantic;
+      let recencyWeight = options?.recencyWeight ?? PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
+      const threshold = options?.threshold ?? 0.6;
+      const limit = options?.limit ?? 10;
 
-    // Recency parameters with validation
-    const safeTauSeconds = Math.max(1, options?.recencyTauSeconds ?? 1209600);
-    const safeBoostDays = Math.max(0, options?.recencyBoostDays ?? 3);
-    const safeBoostValue = Math.max(0, Math.min(1, options?.recencyBoostValue ?? 0.05));
+      // Recency parameters with validation
+      const safeTauSeconds = Math.max(1, options?.recencyTauSeconds ?? 1209600);
+      const safeBoostDays = Math.max(0, options?.recencyBoostDays ?? 3);
+      const safeBoostValue = Math.max(0, Math.min(1, options?.recencyBoostValue ?? 0.05));
 
-    // Normalize weights to sum to 1.0 (with fallback for sum <= 0)
-    const weightSum = keywordWeight + semanticWeight + recencyWeight;
-    if (weightSum <= 0) {
-      // Fallback to defaults
-      keywordWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.keyword;
-      semanticWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.semantic;
-      recencyWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
-    } else {
-      keywordWeight /= weightSum;
-      semanticWeight /= weightSum;
-      recencyWeight /= weightSum;
+      // Normalize weights to sum to 1.0 (with fallback for sum <= 0)
+      const weightSum = keywordWeight + semanticWeight + recencyWeight;
+      if (weightSum <= 0) {
+        // Fallback to defaults
+        keywordWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.keyword;
+        semanticWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.semantic;
+        recencyWeight = PostgresStorageBackend.DEFAULT_WEIGHTS.recency;
+      } else {
+        keywordWeight /= weightSum;
+        semanticWeight /= weightSum;
+        recencyWeight /= weightSum;
+      }
+
+      // Generate query embedding for semantic search
+      const queryEmbedding = await this.generateEmbedding(query);
+
+      // Hybrid query with:
+      // 1. keyword_norm: ts_rank normalized via saturation (x / (x + 1)) -> 0-1
+      // 2. semantic_score: cosine similarity clamped to 0-1 via GREATEST(0, 1-distance)
+      // 3. recency_score: exp decay + boost, capped at 1.0
+      const sqlQuery = `
+        WITH keyword_search AS (
+          SELECT
+            id,
+            ts_rank(
+              setweight(to_tsvector('english', COALESCE(title, '')), 'A') ||
+              setweight(to_tsvector('english', COALESCE(content::text, '')), 'B'),
+              plainto_tsquery('english', $1)
+            ) AS keyword_rank
+          FROM conversations
+          WHERE
+            to_tsvector('english', COALESCE(title, '')) ||
+            to_tsvector('english', COALESCE(content::text, ''))
+            @@ plainto_tsquery('english', $1)
+        ),
+        semantic_search AS (
+          SELECT
+            id,
+            -- Clamp to [0, 1]: pgvector <=> returns distance (0-2), so 1-dist can be negative
+            GREATEST(0, 1 - (embedding <=> $2::vector)) AS semantic_score
+          FROM conversations
+          WHERE embedding IS NOT NULL
+        ),
+        combined AS (
+          SELECT
+            c.*,
+            -- Keyword score: normalized via saturation function (0-1)
+            COALESCE(k.keyword_rank, 0) / (COALESCE(k.keyword_rank, 0) + 1.0) AS keyword_score,
+            -- Semantic score: already clamped to 0-1
+            COALESCE(s.semantic_score, 0) AS semantic_score,
+            -- Recency score: exp decay + boost, capped at 1.0
+            LEAST(
+              1.0,
+              EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $7)
+              + CASE WHEN c.created_at >= NOW() - ($8::int * INTERVAL '1 day') THEN $9 ELSE 0 END
+            ) AS recency_score
+          FROM conversations c
+          LEFT JOIN keyword_search k ON c.id = k.id
+          LEFT JOIN semantic_search s ON c.id = s.id
+          WHERE k.id IS NOT NULL OR (s.semantic_score IS NOT NULL AND s.semantic_score > $6)
+        )
+        SELECT
+          *,
+          (keyword_score * $3 + semantic_score * $4 + recency_score * $5) AS combined_score
+        FROM combined
+        WHERE (keyword_score * $3 + semantic_score * $4 + recency_score * $5) > 0
+        ORDER BY combined_score DESC
+        LIMIT $10
+      `;
+
+      const result = await this.pool.query(sqlQuery, [
+        query,                           // $1: search query
+        `[${queryEmbedding.join(',')}]`, // $2: embedding vector
+        keywordWeight,                   // $3: normalized keyword weight
+        semanticWeight,                  // $4: normalized semantic weight
+        recencyWeight,                   // $5: normalized recency weight
+        threshold,                       // $6: semantic threshold
+        safeTauSeconds,                  // $7: decay constant (tau)
+        safeBoostDays,                   // $8: boost window (days)
+        safeBoostValue,                  // $9: boost value
+        limit,                           // $10: result limit
+      ]);
+
+      return result.rows.map((row) => ({
+        item: this.mapRowToItem(row),
+        similarity: row.semantic_score,
+        keywordScore: row.keyword_score,
+        semanticScore: row.semantic_score,
+        recencyScore: row.recency_score,
+        combinedScore: row.combined_score,
+      }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to perform hybrid search: ${msg}`);
     }
-
-    // Generate query embedding for semantic search
-    const queryEmbedding = await this.generateEmbedding(query);
-
-    // Hybrid query with:
-    // 1. keyword_norm: ts_rank normalized via saturation (x / (x + 1)) -> 0-1
-    // 2. semantic_score: cosine similarity clamped to 0-1 via GREATEST(0, 1-distance)
-    // 3. recency_score: exp decay + boost, capped at 1.0
-    const sqlQuery = `
-      WITH keyword_search AS (
-        SELECT
-          id,
-          ts_rank(
-            setweight(to_tsvector('english', COALESCE(title, '')), 'A') ||
-            setweight(to_tsvector('english', COALESCE(content::text, '')), 'B'),
-            plainto_tsquery('english', $1)
-          ) AS keyword_rank
-        FROM conversations
-        WHERE
-          to_tsvector('english', COALESCE(title, '')) ||
-          to_tsvector('english', COALESCE(content::text, ''))
-          @@ plainto_tsquery('english', $1)
-      ),
-      semantic_search AS (
-        SELECT
-          id,
-          -- Clamp to [0, 1]: pgvector <=> returns distance (0-2), so 1-dist can be negative
-          GREATEST(0, 1 - (embedding <=> $2::vector)) AS semantic_score
-        FROM conversations
-        WHERE embedding IS NOT NULL
-      ),
-      combined AS (
-        SELECT
-          c.*,
-          -- Keyword score: normalized via saturation function (0-1)
-          COALESCE(k.keyword_rank, 0) / (COALESCE(k.keyword_rank, 0) + 1.0) AS keyword_score,
-          -- Semantic score: already clamped to 0-1
-          COALESCE(s.semantic_score, 0) AS semantic_score,
-          -- Recency score: exp decay + boost, capped at 1.0
-          LEAST(
-            1.0,
-            EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $7)
-            + CASE WHEN c.created_at >= NOW() - ($8::int * INTERVAL '1 day') THEN $9 ELSE 0 END
-          ) AS recency_score
-        FROM conversations c
-        LEFT JOIN keyword_search k ON c.id = k.id
-        LEFT JOIN semantic_search s ON c.id = s.id
-        WHERE k.id IS NOT NULL OR (s.semantic_score IS NOT NULL AND s.semantic_score > $6)
-      )
-      SELECT
-        *,
-        (keyword_score * $3 + semantic_score * $4 + recency_score * $5) AS combined_score
-      FROM combined
-      WHERE (keyword_score * $3 + semantic_score * $4 + recency_score * $5) > 0
-      ORDER BY combined_score DESC
-      LIMIT $10
-    `;
-
-    const result = await this.pool.query(sqlQuery, [
-      query,                           // $1: search query
-      `[${queryEmbedding.join(',')}]`, // $2: embedding vector
-      keywordWeight,                   // $3: normalized keyword weight
-      semanticWeight,                  // $4: normalized semantic weight
-      recencyWeight,                   // $5: normalized recency weight
-      threshold,                       // $6: semantic threshold
-      safeTauSeconds,                  // $7: decay constant (tau)
-      safeBoostDays,                   // $8: boost window (days)
-      safeBoostValue,                  // $9: boost value
-      limit,                           // $10: result limit
-    ]);
-
-    return result.rows.map((row) => ({
-      item: this.mapRowToItem(row),
-      similarity: row.semantic_score,
-      keywordScore: row.keyword_score,
-      semanticScore: row.semantic_score,
-      recencyScore: row.recency_score,
-      combinedScore: row.combined_score,
-    }));
   }
 
   /**
    * Create new session
    */
   async createSession(name: string, description?: string, parentId?: string): Promise<string> {
-    const id = uuidv4();
-    const query = `
-      INSERT INTO sessions (id, name, description, parent_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, NOW(), NOW())
-      RETURNING id
-    `;
+    try {
+      const id = uuidv4();
+      const query = `
+        INSERT INTO sessions (id, name, description, parent_id, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, NOW(), NOW())
+        RETURNING id
+      `;
 
-    const result = await this.pool.query(query, [id, name, description || null, parentId || null]);
-    return result.rows[0].id;
+      const result = await this.pool.query(query, [id, name, description || null, parentId || null]);
+      return result.rows[0].id;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to create session: ${msg}`);
+    }
   }
 
   /**
    * Get session by ID
    */
   async getSession(id: string): Promise<Session | null> {
-    const query = `
-      SELECT
-        s.id,
-        s.name,
-        s.description,
-        s.parent_id,
-        s.created_at,
-        s.updated_at,
-        COUNT(c.id) as item_count
-      FROM sessions s
-      LEFT JOIN conversations c ON c.session_id = s.id
-      WHERE s.id = $1
-      GROUP BY s.id
-    `;
+    try {
+      const query = `
+        SELECT
+          s.id,
+          s.name,
+          s.description,
+          s.parent_id,
+          s.created_at,
+          s.updated_at,
+          COUNT(c.id) as item_count
+        FROM sessions s
+        LEFT JOIN conversations c ON c.session_id = s.id
+        WHERE s.id = $1
+        GROUP BY s.id
+      `;
 
-    const result = await this.pool.query(query, [id]);
+      const result = await this.pool.query(query, [id]);
 
-    if (result.rows.length === 0) {
-      return null;
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return this.mapRowToSession(result.rows[0]);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get session: ${msg}`);
     }
-
-    return this.mapRowToSession(result.rows[0]);
   }
 
   /**
    * List recent sessions with pagination
    */
   async listSessions(limit: number = 10): Promise<Session[]> {
-    const query = `
-      SELECT
-        s.id,
-        s.name,
-        s.description,
-        s.parent_id,
-        s.created_at,
-        s.updated_at,
-        COUNT(c.id) as item_count
-      FROM sessions s
-      LEFT JOIN conversations c ON c.session_id = s.id
-      GROUP BY s.id
-      ORDER BY s.updated_at DESC
-      LIMIT $1
-    `;
+    try {
+      const query = `
+        SELECT
+          s.id,
+          s.name,
+          s.description,
+          s.parent_id,
+          s.created_at,
+          s.updated_at,
+          COUNT(c.id) as item_count
+        FROM sessions s
+        LEFT JOIN conversations c ON c.session_id = s.id
+        GROUP BY s.id
+        ORDER BY s.updated_at DESC
+        LIMIT $1
+      `;
 
-    const result = await this.pool.query(query, [limit]);
-    return result.rows.map(this.mapRowToSession);
+      const result = await this.pool.query(query, [limit]);
+      return result.rows.map(this.mapRowToSession);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to list sessions: ${msg}`);
+    }
   }
 
   /**
    * Delete session (conversations will be orphaned, not deleted)
    */
   async deleteSession(id: string): Promise<boolean> {
-    const query = `DELETE FROM sessions WHERE id = $1`;
-    const result = await this.pool.query(query, [id]);
-    return result.rowCount !== null && result.rowCount > 0;
+    try {
+      const query = `DELETE FROM sessions WHERE id = $1`;
+      const result = await this.pool.query(query, [id]);
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to delete session: ${msg}`);
+    }
+  }
+
+  /**
+   * Get conversation timeline (cross-source chronological view)
+   */
+  async getTimeline(options?: TimelineOptions): Promise<TimelineEntry[]> {
+    try {
+      const conditions: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (options?.sources && options.sources.length > 0) {
+        conditions.push(`source = ANY($${paramIndex++})`);
+        params.push(options.sources);
+      }
+
+      if (options?.project) {
+        conditions.push(`project = $${paramIndex++}`);
+        params.push(options.project);
+      }
+
+      if (options?.createdAfter) {
+        conditions.push(`created_at >= $${paramIndex++}`);
+        params.push(options.createdAfter);
+      }
+
+      if (options?.createdBefore) {
+        conditions.push(`created_at <= $${paramIndex++}`);
+        params.push(options.createdBefore);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      const query = `
+        SELECT id, source, title, project, message_count, topics, created_at, updated_at
+        FROM conversations
+        ${whereClause}
+        ORDER BY created_at DESC
+        LIMIT $${paramIndex++} OFFSET $${paramIndex}
+      `;
+
+      params.push(options?.limit || 50, options?.offset || 0);
+
+      const result = await this.pool.query(query, params);
+      return result.rows.map((row: any) => ({
+        id: row.id,
+        source: row.source,
+        title: row.title,
+        project: row.project,
+        messageCount: row.message_count || 0,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        topics: row.topics || [],
+      }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get timeline: ${msg}`);
+    }
+  }
+
+  /**
+   * Get topic groups (conversations grouped by topic, cross-source)
+   */
+  async getTopics(limit: number = 20, minCount: number = 1): Promise<TopicGroup[]> {
+    try {
+      const query = `
+        SELECT
+          topic,
+          COUNT(DISTINCT c.id) as conversation_count,
+          ARRAY_AGG(DISTINCT c.source) as sources,
+          MAX(c.created_at) as latest_at,
+          MIN(c.created_at) as earliest_at,
+          ARRAY_AGG(DISTINCT c.id ORDER BY c.id) as conversation_ids
+        FROM conversations c,
+             LATERAL unnest(COALESCE(c.topics, ARRAY['Uncategorized'])) AS topic
+        GROUP BY topic
+        HAVING COUNT(DISTINCT c.id) >= $1
+        ORDER BY conversation_count DESC, latest_at DESC
+        LIMIT $2
+      `;
+
+      const result = await this.pool.query(query, [minCount, limit]);
+      return result.rows.map((row: any) => ({
+        topic: row.topic,
+        conversationCount: parseInt(row.conversation_count, 10),
+        sources: row.sources,
+        latestAt: row.latest_at,
+        earliestAt: row.earliest_at,
+        conversationIds: row.conversation_ids,
+      }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get topics: ${msg}`);
+    }
   }
 
   /**

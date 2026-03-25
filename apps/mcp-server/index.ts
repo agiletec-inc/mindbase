@@ -46,7 +46,7 @@ const TOOLS: Tool[] = [
       properties: {
         source: {
           type: 'string',
-          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf'],
+          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf', 'gemini'],
           description: 'Source platform of the conversation',
         },
         title: {
@@ -95,7 +95,7 @@ const TOOLS: Tool[] = [
         },
         source: {
           type: 'string',
-          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf'],
+          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf', 'gemini'],
           description: 'Filter by source platform',
         },
         category: {
@@ -157,7 +157,7 @@ const TOOLS: Tool[] = [
         },
         source: {
           type: 'string',
-          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf'],
+          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf', 'gemini'],
           description: 'Filter results by source platform',
         },
         recencyWeight: {
@@ -221,7 +221,7 @@ const TOOLS: Tool[] = [
         },
         source: {
           type: 'string',
-          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf'],
+          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf', 'gemini'],
           description: 'Filter results by source platform',
         },
         recencyTauSeconds: {
@@ -324,6 +324,118 @@ const TOOLS: Tool[] = [
         },
       },
       required: ['id'],
+    },
+  },
+  // Cross-source tools
+  {
+    name: 'conversation_timeline',
+    description: 'Get a chronological timeline of conversations across all sources (claude-code, chatgpt, cursor, etc.)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sources: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by sources (e.g. ["claude-code", "chatgpt"]). Empty = all sources.',
+        },
+        project: {
+          type: 'string',
+          description: 'Filter by project name',
+        },
+        createdAfter: {
+          type: 'string',
+          description: 'Filter by creation date (ISO 8601)',
+        },
+        createdBefore: {
+          type: 'string',
+          description: 'Filter by creation date (ISO 8601)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results (default: 50)',
+        },
+        offset: {
+          type: 'number',
+          description: 'Pagination offset (default: 0)',
+        },
+      },
+    },
+  },
+  {
+    name: 'conversation_topics',
+    description: 'Get topic groups across all conversation sources. Shows which topics span multiple sources and time periods.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Maximum number of topic groups (default: 20)',
+        },
+        minCount: {
+          type: 'number',
+          description: 'Minimum conversation count per topic (default: 1)',
+        },
+      },
+    },
+  },
+  {
+    name: 'content_generate',
+    description: 'Generate article draft from conversation data for Qiita, Zenn, or Note platforms',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          description: 'Article topic (used for semantic search if no IDs provided)',
+        },
+        platform: {
+          type: 'string',
+          enum: ['qiita', 'zenn', 'note'],
+          description: 'Target platform',
+        },
+        conversationIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Specific conversation IDs to use as source material (optional)',
+        },
+        style: {
+          type: 'string',
+          description: 'Writing style hint (e.g. "technical", "beginner-friendly", "essay")',
+        },
+      },
+      required: ['topic', 'platform'],
+    },
+  },
+  {
+    name: 'content_publish',
+    description: 'Publish generated article to target platform (note.com, Qiita, or Zenn)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description: 'Article content in markdown',
+        },
+        platform: {
+          type: 'string',
+          enum: ['qiita', 'zenn', 'note'],
+          description: 'Target publishing platform',
+        },
+        title: {
+          type: 'string',
+          description: 'Article title',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Article tags/topics',
+        },
+        draft: {
+          type: 'boolean',
+          description: 'Publish as draft (default: true)',
+        },
+      },
+      required: ['content', 'platform', 'title'],
     },
   },
   // Memory Management Tools (Serena-inspired)
@@ -535,6 +647,22 @@ class MindBaseMCPServer {
             result = await this.tools.conversationDelete(args as any);
             break;
 
+          case 'conversation_timeline':
+            result = await this.tools.conversationTimeline(args as any);
+            break;
+
+          case 'conversation_topics':
+            result = await this.tools.conversationTopics(args as any);
+            break;
+
+          case 'content_generate':
+            result = await this.tools.contentGenerate(args as any);
+            break;
+
+          case 'content_publish':
+            result = await this.tools.contentPublish(args as any);
+            break;
+
           case 'session_create':
             result = await this.tools.sessionCreate(args as any);
             break;
@@ -620,6 +748,7 @@ class MindBaseMCPServer {
     console.error(`[MindBase MCP] Database: ${DATABASE_URL.replace(/:[^:]*@/, ':****@')}`);
     console.error(`[MindBase MCP] Ollama: ${OLLAMA_URL}`);
     console.error(`[MindBase MCP] Model: ${EMBEDDING_MODEL}`);
+    console.error(`[MindBase MCP] OpenAI: ${process.env.OPENAI_API_KEY ? 'configured' : 'not configured (Ollama only)'}`);
   }
 
   /**

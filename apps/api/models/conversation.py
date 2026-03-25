@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 import uuid
 
 from pgvector.sqlalchemy import Vector
+
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "3072"))
 from sqlalchemy import (
     ARRAY,
     Column,
@@ -76,8 +79,8 @@ class Conversation(Base):
     participant_count = Column(Integer, default=2)
     message_count = Column(Integer, default=0)
 
-    # Embedding (qwen3-embedding:8b = 1024 dimensions)
-    embedding = Column(Vector(1024))
+    # Embedding (OpenAI text-embedding-3-large = 3072 dimensions, Ollama fallback)
+    embedding = Column(Vector(EMBEDDING_DIMENSIONS))
 
     # Derived metadata
     project = Column(String)

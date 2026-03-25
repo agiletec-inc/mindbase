@@ -298,11 +298,12 @@ class ChatGPTCollector(BaseCollector):
                                 conv = self._parse_json_conversation(data)
                                 if conv:
                                     conversations.append(conv)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                                self.stats["errors"] += 1
 
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"Could not read key-value table: {exc}")
 
             conn.close()
 
@@ -436,8 +437,9 @@ class ChatGPTCollector(BaseCollector):
                 if isinstance(msg_data, str):
                     try:
                         msg_data = json.loads(msg_data)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse messages JSON: {exc}")
+                        self.stats["errors"] += 1
 
                 if isinstance(msg_data, list):
                     for msg in msg_data:
@@ -473,8 +475,9 @@ class ChatGPTCollector(BaseCollector):
                 if isinstance(content, str):
                     try:
                         content = json.loads(content)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse content JSON: {exc}")
+                        self.stats["errors"] += 1
 
                 if isinstance(content, dict):
                     return self._parse_json_conversation(content)
@@ -539,19 +542,10 @@ class ChatGPTCollector(BaseCollector):
 
             # Check for OpenAI-specific format
             if not messages and "mapping" in data:
-                # OpenAI uses a mapping structure for conversations
+                # OpenAI uses a mapping structure with parent/children links
                 mapping = data["mapping"]
                 if isinstance(mapping, dict):
-                    # Extract messages from mapping
-                    for node_id, node_data in mapping.items():
-                        if "message" in node_data:
-                            msg = node_data["message"]
-                            parsed_msg = self._parse_message(msg)
-                            if parsed_msg:
-                                messages.append(parsed_msg)
-
-                    # Sort messages by timestamp or creation order
-                    messages.sort(key=lambda m: m.timestamp)
+                    messages = self._parse_mapping_messages(mapping)
 
             if not messages:
                 return None
@@ -590,6 +584,52 @@ class ChatGPTCollector(BaseCollector):
         except Exception as e:
             logger.debug(f"Error parsing JSON conversation: {e}")
             return None
+
+    def _parse_mapping_messages(self, mapping: Dict[str, Any]) -> List[Message]:
+        """Parse OpenAI mapping structure using children links for correct ordering.
+
+        The mapping is a dict of node_id -> {message, parent, children}.
+        We walk the tree from root to leaf using children pointers.
+        """
+        messages: List[Message] = []
+
+        # Find root node (no parent or parent not in mapping)
+        root_id = None
+        for node_id, node_data in mapping.items():
+            parent = node_data.get("parent")
+            if parent is None or parent not in mapping:
+                root_id = node_id
+                break
+
+        if root_id is None:
+            return messages
+
+        # Walk the tree following children links
+        current_id: Optional[str] = root_id
+        visited: set = set()
+
+        while current_id and current_id not in visited:
+            visited.add(current_id)
+            node = mapping.get(current_id)
+            if not node:
+                break
+
+            # Extract message if present
+            if "message" in node and node["message"] is not None:
+                msg = node["message"]
+                role = msg.get("author", {}).get("role", "")
+
+                # Skip system messages
+                if role not in ("system", "tool"):
+                    parsed = self._parse_message(msg)
+                    if parsed:
+                        messages.append(parsed)
+
+            # Follow first child (main conversation branch)
+            children = node.get("children", [])
+            current_id = children[-1] if children else None
+
+        return messages
 
     def _parse_message(self, msg_data: Any) -> Optional[Message]:
         """Parse message data"""
@@ -630,7 +670,12 @@ class ChatGPTCollector(BaseCollector):
                     if "parts" in content:
                         parts = content["parts"]
                         if isinstance(parts, list):
-                            content = "\n".join(str(part) for part in parts)
+                            # Filter out non-string parts and empty strings
+                            text_parts = [
+                                str(part) for part in parts
+                                if part and (isinstance(part, str) or isinstance(part, (int, float)))
+                            ]
+                            content = "\n".join(text_parts) if text_parts else ""
                         else:
                             content = str(parts)
                     else:
@@ -679,23 +724,16 @@ class ChatGPTCollector(BaseCollector):
             return None
 
     def _extract_text_from_binary(self, binary_data: bytes) -> str:
-        """Extract readable text from binary data"""
-        # Simple extraction of ASCII/UTF-8 strings
-        text_parts = []
-        current_string = []
-
-        for byte in binary_data:
-            if 32 <= byte <= 126:  # Printable ASCII
-                current_string.append(chr(byte))
-            else:
-                if len(current_string) > 10:  # Minimum string length
-                    text_parts.append("".join(current_string))
-                current_string = []
-
-        if current_string:
-            text_parts.append("".join(current_string))
-
-        return " ".join(text_parts)
+        """Extract UTF-8 text segments from binary data."""
+        segments = []
+        for chunk in binary_data.split(b"\x00"):
+            try:
+                text = chunk.decode("utf-8").strip()
+                if len(text) > 10:
+                    segments.append(text)
+            except UnicodeDecodeError:
+                continue
+        return " ".join(segments)
 
     def _extract_conversations_from_text(self, text: str) -> List[Conversation]:
         """Extract conversation data from text content"""
@@ -718,8 +756,8 @@ class ChatGPTCollector(BaseCollector):
                     if conv:
                         conversations.append(conv)
 
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Failed to parse JSON from extracted text: {exc}")
 
         return conversations
 

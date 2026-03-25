@@ -7,13 +7,12 @@
     "rootDir": "../..",
     "strict": false,
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "sourceMap": true
+    "skipLibCheck": true
   },
   "include": [
     "./**/*.ts",
-    "../../libs/generators/**/*.ts"
+    "../../libs/generators/**/*.ts",
+    "../../apps/mcp-server/storage/**/*.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }
