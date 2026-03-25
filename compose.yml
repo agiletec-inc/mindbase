@@ -6,7 +6,7 @@ services:
     container_name: airis-mindbase-workspace
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      target: workspace
     volumes:
       - ./:/app:delegated
       - node_modules:/app/node_modules
@@ -53,7 +53,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      target: api
     container_name: mindbase-api-dev
     ports:
       - "${API_PORT:-18003}:8000"
@@ -103,7 +103,7 @@ services:
   cli:
     build:
       context: .
-      dockerfile: apps/cli/Dockerfile
+      target: cli
     container_name: mindbase-cli
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-mindbase}:${POSTGRES_PASSWORD:-mindbase_dev}@postgres:${POSTGRES_INTERNAL_PORT:-5432}/${POSTGRES_DB:-mindbase_dev}
