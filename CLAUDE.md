@@ -30,15 +30,15 @@ These files are generated from `manifest.toml` via `airis init`:
 
 ### 3. Docker-First Development
 
-Host package manager commands are forbidden. Use `make` or `airis` commands:
+Host package manager commands are forbidden. Use `airis` commands:
 
 ```bash
 # ❌ FORBIDDEN on host
 npm install / pnpm install / yarn install
 
 # ✅ USE INSTEAD
-make up              # Start services
-make api-shell       # Enter container, then run commands inside
+airis up              # Start services
+airis api-shell       # Enter container, then run commands inside
 ```
 
 ---
@@ -61,27 +61,27 @@ make api-shell       # Enter container, then run commands inside
 
 ```bash
 cp .env.example .env          # Configure environment
-make up                       # Start PostgreSQL + API (+ Ollama on non-Apple Silicon)
-make model-pull               # Download embedding model (~4.7GB, first time only)
-make migrate                  # Run database migrations
-make health                   # Verify all services running
+airis up                      # Start PostgreSQL + API
+airis model-pull              # Download embedding model (~4.7GB, first time only)
+airis migrate                 # Run database migrations
+airis health                  # Verify all services running
 ```
 
 ### Common Commands
 
-| Make Command | AIRIS Equivalent | Description |
-|--------------|------------------|-------------|
-| `make up` | `airis up` | Start all services |
-| `make down` | `airis down` | Stop all services |
-| `make logs` | `airis logs` | View all logs |
-| `make api-shell` | - | Enter API container for Python work |
-| `make db-shell` | - | Enter PostgreSQL shell |
-| `make test` | `airis test` | Run all tests |
-| `make test-unit` | - | Run unit tests only |
-| `make test-integration` | - | Run integration tests |
-| `make test-cov` | - | Tests with coverage report |
-
-**Note**: `airis` commands are preferred when available. Use `make` for Python/database-specific tasks.
+| Command | Description |
+|---------|-------------|
+| `airis up` | Start all services |
+| `airis down` | Stop all services |
+| `airis restart` | Restart all services |
+| `airis logs` | View all logs |
+| `airis ps` | Show container status |
+| `airis api-shell` | Enter API container for Python work |
+| `airis db-shell` | Enter PostgreSQL shell |
+| `airis test` | Run all tests |
+| `airis health` | Check service health |
+| `airis migrate` | Run database migrations |
+| `airis model-pull` | Download embedding model |
 
 ### Service Endpoints (configured via .env)
 
@@ -193,7 +193,7 @@ Tuning via env vars: `SEARCH_RECENCY_TAU_SECONDS` (14d default), `SEARCH_RECENCY
 ### Testing
 
 ```bash
-# Inside Docker container (make api-shell)
+# Inside Docker container (airis api-shell)
 pytest tests/ -v                          # All tests
 pytest -m unit -v                         # Unit tests only
 pytest -m integration -v                  # Integration tests
@@ -225,9 +225,9 @@ pnpm --filter @mindbase/mcp-server typecheck
 
 ## Troubleshooting
 
-**"Ollama model not found"**: `make model-pull`
+**"Ollama model not found"**: `airis model-pull`
 
-**"Database connection refused"**: `make health` then `make restart`
+**"Database connection refused"**: `airis health` then `airis restart`
 
 **"Permission denied for Application Support"**:
 ```bash
