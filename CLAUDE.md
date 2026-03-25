@@ -95,37 +95,27 @@ airis health                  # Verify all services running
 ```
 apps/
 ├── api/              # FastAPI backend (Python) - main entry: main.py
+├── cli/              # CLI tool (TypeScript) - content generation pipeline
 ├── mcp-server/       # MCP Server (TypeScript) - main entry: index.ts
 ├── settings/         # Settings UI (React + Vite + Tailwind)
 └── menubar-swift/    # Native macOS menubar app with auto-collection
 
 libs/
 ├── collectors/       # Python conversation collectors (Claude, Cursor, ChatGPT, etc.)
+├── generators/       # TypeScript article generators (Qiita, Zenn, Note publishing)
 ├── processors/       # TypeScript content processors
-└── generators/       # TypeScript article generators
+└── shared/           # Shared TypeScript types
 
-supabase/migrations/  # PostgreSQL migrations (will move to packages/database/)
+supabase/migrations/  # PostgreSQL migrations (sequential SQL files)
 tests/                # pytest tests (unit/integration/e2e markers)
 ```
 
-### Key Files
+### Key Entry Points
 
-**Python API (`apps/api/`)**:
-- `main.py` - FastAPI app with CORS, route registration
-- `config.py` - Pydantic settings from environment
-- `database.py` - SQLAlchemy async engine with pgvector
-- `ollama_client.py` - EmbeddingClient with dual provider (OpenAI → Ollama fallback)
-
-**MCP Server (`apps/mcp-server/`)**:
-- `index.ts` - MCP entry point (stdio transport)
-- `storage/postgres.ts` - Conversation storage backend
-- `storage/memory-fs.ts` - Markdown memory storage (Serena-inspired)
-- `tools/conversation.ts` - conversation_save/get/search/delete, conversation_hybrid_search, conversation_timeline, conversation_topics, session_*, content_generate
-- `tools/memory.ts` - memory_write, memory_read, memory_list, memory_search, memory_delete
-
-**Collectors (`libs/collectors/`)**:
-- `base_collector.py` - Abstract base with `Conversation` and `Message` dataclasses
-- Source-specific: `claude_collector.py`, `cursor_collector.py`, `chatgpt_collector.py`, etc.
+- **API**: `apps/api/main.py` → routes in `apps/api/api/routes/`
+- **MCP Server**: `apps/mcp-server/index.ts` → tools in `tools/`, storage in `storage/`
+- **CLI**: `apps/cli/index.ts` → uses `libs/generators/` for article generation
+- **Collectors**: `libs/collectors/base_collector.py` (abstract) → source-specific implementations
 
 ## Architecture Notes
 
@@ -171,6 +161,23 @@ Three scoring components combined with auto-normalized weights:
 
 Tuning via env vars: `SEARCH_RECENCY_TAU_SECONDS` (14d default), `SEARCH_RECENCY_WEIGHT` (0.15), `SEARCH_RECENCY_BOOST_DAYS` (3), `SEARCH_RECENCY_BOOST_VALUE` (0.05)
 
+### Content Generation Pipeline
+
+会話データから記事を生成し、プラットフォームに公開:
+
+1. `apps/cli/` - CLI エントリポイント (`mindbase` コマンド)
+2. `libs/generators/article-generator.ts` - LLM (OpenAI) で記事生成
+3. `libs/generators/platform-prompts.ts` - プラットフォーム固有プロンプト
+4. `libs/generators/publishers/` - Qiita, Zenn, Note パブリッシャー
+
+実行: `docker compose run --rm cli pnpm generate` / `pnpm publish`
+
+### CI/CD
+
+- Push to `next` or PR to `main` で CI 実行 (pnpm install → test → build)
+- `next` → `main` はCI成功時に自動マージ
+- ワークフロー: `.github/workflows/ci.yml` (auto-generated from manifest.toml)
+
 ## Development Conventions
 
 ### Monorepo Rules
@@ -205,8 +212,8 @@ black apps/api/ libs/collectors/          # Format
 ruff check apps/api/ libs/collectors/     # Lint
 mypy apps/api/ libs/collectors/           # Type check
 
-# TypeScript (from host)
-pnpm --filter @mindbase/mcp-server typecheck
+# TypeScript
+airis typecheck
 ```
 
 ## Common Tasks
