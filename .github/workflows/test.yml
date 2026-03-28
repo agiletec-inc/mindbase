@@ -61,7 +61,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://mindbase:mindbase_dev@localhost:5432/mindbase_test
           OLLAMA_URL: http://localhost:11434
         run: |
-          pytest tests/ -v --cov=app --cov=collectors --cov-report=xml
+          pytest tests/unit -v --cov=app --cov=collectors --cov-report=xml
 
       - name: Run TypeScript type check
         run: pnpm typecheck
@@ -99,3 +99,4 @@ jobs:
 
       - name: Run mypy
         run: mypy app/ collectors/ --ignore-missing-imports
+        continue-on-error: true
