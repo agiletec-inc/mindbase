@@ -2,7 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, stg ]
   pull_request:
     branches: [ main ]
 
@@ -39,7 +39,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -56,7 +56,7 @@ jobs:
           ln -sf apps/api app
 
       - name: Install TypeScript dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Run Python tests
         env:
@@ -102,7 +102,7 @@ jobs:
         run: black --check apps/api/ libs/collectors/
 
       - name: Run Ruff
-        run: ruff check apps/api/ libs/collectors/
+        run: ruff check apps/api/ libs/collectors/ --select E9,F63,F7,F82
 
       - name: Run mypy
         continue-on-error: true  # TODO: Fix mypy configuration

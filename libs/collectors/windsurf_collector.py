@@ -197,7 +197,9 @@ class WindsurfCollector(BaseCollector):
                             if conv:
                                 conversations.append(conv)
                         except Exception as exc:
-                            logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                            logger.debug(
+                                f"Failed to parse JSON value for key {key}: {exc}"
+                            )
                             self.stats["errors"] += 1
 
             except Exception as e:

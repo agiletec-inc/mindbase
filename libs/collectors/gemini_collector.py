@@ -269,18 +269,13 @@ class GeminiCollector(BaseCollector):
             metadata={"source_format": "google_takeout", "entry_count": len(entries)},
         )
 
-    def _parse_conversation_dict(
-        self, data: Dict[str, Any]
-    ) -> Optional[Conversation]:
+    def _parse_conversation_dict(self, data: Dict[str, Any]) -> Optional[Conversation]:
         """Parse a conversation dictionary (custom or web export format)"""
         messages = []
 
         # Handle different message field names
         message_list = (
-            data.get("messages")
-            or data.get("turns")
-            or data.get("chat_history")
-            or []
+            data.get("messages") or data.get("turns") or data.get("chat_history") or []
         )
 
         for msg_data in message_list:
@@ -292,17 +287,9 @@ class GeminiCollector(BaseCollector):
             return None
 
         # Extract metadata
-        conv_id = (
-            data.get("id")
-            or data.get("conversation_id")
-            or data.get("chat_id")
-        )
+        conv_id = data.get("id") or data.get("conversation_id") or data.get("chat_id")
 
-        title = (
-            data.get("title")
-            or data.get("name")
-            or self.extract_title(data)
-        )
+        title = data.get("title") or data.get("name") or self.extract_title(data)
 
         created_at = self.normalize_timestamp(
             data.get("created_at")
@@ -312,9 +299,7 @@ class GeminiCollector(BaseCollector):
         )
 
         updated_at = self.normalize_timestamp(
-            data.get("updated_at")
-            or data.get("update_time")
-            or messages[-1].timestamp
+            data.get("updated_at") or data.get("update_time") or messages[-1].timestamp
         )
 
         return Conversation(
