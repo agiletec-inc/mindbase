@@ -1,0 +1,216 @@
+version = 1
+mode = "docker-first"
+app = []
+
+[project]
+id = "mindbase"
+binary_name = ""
+version = "1.0.0"
+description = "mindbase - Docker-first monorepo"
+authors = []
+license = "MIT"
+homepage = ""
+repository = ""
+keywords = [
+    "monorepo",
+    "docker",
+    "typescript",
+]
+categories = ["development-tools"]
+rust_edition = ""
+
+[workspace]
+name = "airis-mindbase"
+package_manager = "pnpm@10.22.0"
+image = "node:24-alpine"
+workdir = "/app"
+
+[workspace.clean]
+dirs = [
+    ".next",
+    "dist",
+    "build",
+    "out",
+    ".turbo",
+    ".swc",
+    ".cache",
+]
+recursive = ["node_modules"]
+
+[catalog]
+
+[workspaces]
+apps = []
+libs = []
+
+[dev]
+apps_pattern = "apps/*/compose.yml"
+
+# Active apps only — ghost entries removed (see #8)
+[apps.api]
+path = "app"
+type = "python"
+
+[docker]
+baseImage = "python:3.12-slim"
+workdir = "/app"
+
+[service]
+
+[rule.verify]
+commands = [
+    "airis lint",
+    "airis test",
+]
+
+[rule.ci]
+commands = [
+    "airis lint",
+    "airis test",
+    "airis build",
+]
+
+[packages]
+workspaces = []
+app = []
+
+[packages.catalog]
+react = "latest"
+react-dom = "latest"
+react-router-dom = "latest"
+typescript = "latest"
+tailwindcss = "latest"
+zod = "latest"
+vitest = "latest"
+eslint = "latest"
+prettier = "latest"
+vite = "latest"
+tsx = "latest"
+"@types/node" = "latest"
+"@types/react" = "latest"
+"@types/react-dom" = "latest"
+"@modelcontextprotocol/sdk" = "latest"
+i18next = "latest"
+react-i18next = "latest"
+recharts = "3.2.0"
+pg = "latest"
+uuid = "latest"
+
+[packages.root.dependencies]
+
+[packages.root.devDependencies]
+
+[packages.root.optionalDependencies]
+
+[packages.root.scripts]
+dev = "echo 'Run: airis dev'"
+build = "echo 'Run: airis build'"
+lint = "echo 'Run: airis lint'"
+test = "echo 'Run: airis test'"
+
+[packages.root.engines]
+
+[packages.root.pnpm]
+onlyBuiltDependencies = []
+
+[packages.root.pnpm.overrides]
+qs = ">=6.14.1"
+body-parser = ">=2.2.1"
+glob = ">=10.5.0"
+js-yaml = ">=4.1.1"
+react-router = ">=7.12.0"
+react-router-dom = ">=7.12.0"
+"@modelcontextprotocol/sdk" = ">=1.25.2"
+
+[packages.root.pnpm.peerDependencyRules]
+ignoreMissing = []
+
+[packages.root.pnpm.peerDependencyRules.allowedVersions]
+
+[packages.root.pnpm.allowedScripts]
+
+[guards]
+deny = [
+    "npm",
+    "yarn",
+    "pnpm",
+    "bun",
+]
+forbid = [
+    "npm",
+    "yarn",
+    "pnpm",
+    "docker",
+    "docker-compose",
+]
+danger = [
+    "rm -rf /",
+    "chmod -R 777",
+]
+
+[guards.wrap]
+
+[guards.deny_with_message]
+
+[orchestration]
+
+[commands]
+up = "docker compose up -d"
+down = "docker compose down --remove-orphans"
+shell = "docker compose exec -it api bash"
+test = "docker compose exec api pytest tests/ -v"
+lint = "docker compose exec api ruff check app/ collectors/"
+typecheck = "docker compose exec api mypy app/ collectors/ --ignore-missing-imports"
+clean = "rm -rf ./dist ./.next ./build ./out ./__pycache__"
+logs = "docker compose logs -f"
+ps = "docker compose ps"
+restart = "docker compose down --remove-orphans && docker compose up -d"
+api-shell = "docker compose exec api bash"
+db-shell = "docker compose exec postgres psql -U ${POSTGRES_USER:-mindbase} -d ${POSTGRES_DB:-mindbase_dev}"
+health = "docker compose exec postgres pg_isready -U mindbase && curl -sf http://localhost:${API_PORT:-18003}/health | jq ."
+migrate = "docker compose exec postgres bash -c 'for f in /docker-entrypoint-initdb.d/*.sql; do echo \"→ $f\"; psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-mindbase} -d ${POSTGRES_DB:-mindbase_dev} -f \"$f\"; done'"
+model-pull = "ollama pull qwen3-embedding:8b"
+
+[remap]
+"npm install" = "airis install"
+"pnpm install" = "airis install"
+"yarn install" = "airis install"
+"npm run dev" = "airis dev"
+"pnpm dev" = "airis dev"
+"docker compose up" = "airis up"
+"docker compose down" = "airis down"
+
+[versioning]
+strategy = "manual"
+source = "1.0.0"
+
+[docs]
+targets = []
+mode = "warn"
+
+[ci]
+enabled = true
+auto_version = true
+
+[ci.auto_merge]
+enabled = true
+from = "next"
+to = "main"
+
+[templates.api]
+
+[templates.web]
+
+[templates.worker]
+
+[templates.cli]
+
+[templates.lib]
+
+[templates.edge]
+
+[templates.supabase-trigger]
+
+[templates.supabase-realtime]
+
+[runtimes.alias]

@@ -1,0 +1,12 @@
+#!/bin/sh
+
+echo "🔍 Pre-push: Running typecheck..."
+pnpm typecheck || exit 1
+
+echo "🔍 Pre-push: Running Python lint..."
+docker compose exec -T api ruff check app/ collectors/ || exit 1
+
+echo "🔍 Pre-push: Running Python tests..."
+docker compose exec -T api pytest tests/ -v --tb=short || exit 1
+
+echo "✅ All checks passed"

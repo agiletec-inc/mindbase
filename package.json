@@ -13,11 +13,9 @@
     "mcp:build": "tsc -p tsconfig.mcp.json",
     "mcp:start": "node dist/mcp-server/index.js",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'TypeScript linting not configured yet'",
-    "test": "echo 'TypeScript tests not configured yet'",
-    "version:patch": "npm version patch && git push && git push --tags",
-    "version:minor": "npm version minor && git push && git push --tags",
-    "version:major": "npm version major && git push && git push --tags"
+    "lint": "tsc --noEmit",
+    "test": "echo 'No TS tests yet — Python tests run via: docker compose exec api pytest'",
+    "prepare": "husky"
   },
   "keywords": [
     "claude-code",
@@ -30,7 +28,7 @@
   "author": "kazuki",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.0",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "pg": "^8.16.3",
     "pgvector": "^0.2.1",
     "uuid": "^13.0.0"
@@ -39,6 +37,7 @@
     "@types/node": "^24.8.0",
     "@types/pg": "^8.15.5",
     "@types/uuid": "^11.0.0",
+    "husky": "^9.1.7",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }

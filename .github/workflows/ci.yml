@@ -2,17 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [master, dev]
+    branches: [main, stg]
   pull_request:
-    branches: [master, dev]
+    branches: [main, stg]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "20"
-  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
   PNPM_VERSION: "latest"
 
 jobs:
@@ -32,7 +32,6 @@ jobs:
           test -f README.md || { echo "README.md missing"; exit 1; }
           test -f .gitignore || { echo ".gitignore missing"; exit 1; }
           test -f docker-compose.yml || { echo "docker-compose.yml missing"; exit 1; }
-          test -f Makefile || { echo "Makefile missing"; exit 1; }
           test -d app || { echo "app directory missing"; exit 1; }
           test -d collectors || { echo "collectors directory missing"; exit 1; }
           test -d tests || { echo "tests directory missing"; exit 1; }
@@ -68,7 +67,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: mindbase
           POSTGRES_PASSWORD: mindbase_dev
@@ -111,7 +110,6 @@ jobs:
         run: |
           pip install mypy
           mypy app/ collectors/ --ignore-missing-imports
-        continue-on-error: true  # Don't fail CI on type errors initially
 
       - name: Run unit tests
         env:
@@ -168,7 +166,6 @@ jobs:
 
       - name: Lint
         run: pnpm lint
-        continue-on-error: true  # Don't fail CI on lint errors initially
 
   # Docker Build Test
   docker-build:
@@ -204,12 +201,12 @@ jobs:
 
       - name: Start Docker services
         run: |
-          docker compose up -d postgres ollama
+          docker compose --profile ollama up -d postgres ollama
           sleep 10  # Wait for services to be ready
 
       - name: Wait for Ollama model
         run: |
-          docker compose exec -T ollama ollama pull qwen3-embedding:8b || true
+          docker compose --profile ollama exec -T ollama ollama pull qwen3-embedding:8b || true
           echo "✅ Ollama ready"
 
       - name: Install dependencies
@@ -219,8 +216,8 @@ jobs:
 
       - name: Run integration tests
         env:
-          DATABASE_URL: postgresql+asyncpg://mindbase:mindbase_dev@localhost:15433/mindbase
-          OLLAMA_URL: http://localhost:11434
+          DATABASE_URL: postgresql+asyncpg://mindbase:mindbase_dev@localhost:15434/mindbase_dev
+          OLLAMA_URL: http://localhost:11435
         run: |
           pytest tests/integration -v --maxfail=3
 
