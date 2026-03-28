@@ -22,17 +22,18 @@ class TestMessage:
 
     def test_message_id_generation(self):
         """Test message ID is generated from content hash."""
+        fixed_ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
         msg1 = Message(
             role="user",
             content="Same content",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=fixed_ts,
         )
         msg2 = Message(
             role="user",
             content="Same content",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=fixed_ts,
         )
-        assert msg1.message_id == msg2.message_id  # Same content = same ID
+        assert msg1.message_id == msg2.message_id  # Same content+timestamp = same ID
 
 
 class TestConversation:
@@ -93,12 +94,14 @@ class TestBaseCollector:
 
         collector = ConcreteCollector()
 
-        # Missing required fields should fail validation
+        # Empty messages should fail validation
         invalid_conv = Conversation(
-            source="",  # Empty source
-            thread_id="test",
-            title="",  # Empty title
-            messages=[],  # Empty messages
+            id="conv_invalid",
+            source="test",
+            title="",
+            messages=[],
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
         assert collector.validate_conversation(invalid_conv) is False

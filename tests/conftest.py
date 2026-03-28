@@ -118,23 +118,24 @@ def mock_ollama_response() -> dict:
 @pytest.fixture
 def sample_conversation_data() -> dict:
     """Sample conversation data for testing."""
+    from datetime import datetime, timezone
+    from collectors.base_collector import Message
+
+    ts1 = datetime(2025, 1, 16, 10, 0, 0, tzinfo=timezone.utc)
+    ts2 = datetime(2025, 1, 16, 10, 0, 1, tzinfo=timezone.utc)
+
     return {
+        "id": "conv_test123",
         "source": "claude-code",
         "thread_id": "test-thread-123",
         "title": "Test Conversation",
+        "created_at": ts1,
+        "updated_at": ts2,
         "project": "mindbase",
         "tags": ["test", "development"],
         "messages": [
-            {
-                "role": "user",
-                "content": "Hello, this is a test message",
-                "timestamp": "2025-01-16T10:00:00Z",
-            },
-            {
-                "role": "assistant",
-                "content": "This is a test response",
-                "timestamp": "2025-01-16T10:00:01Z",
-            },
+            Message(role="user", content="Hello, this is a test message", timestamp=ts1),
+            Message(role="assistant", content="This is a test response", timestamp=ts2),
         ],
         "metadata": {
             "model": "claude-sonnet-4.5",

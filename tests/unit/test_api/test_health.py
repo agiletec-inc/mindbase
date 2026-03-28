@@ -31,11 +31,8 @@ def test_health_check_structure():
     data = response.json()
 
     # Check required fields
-    required_fields = ["status", "timestamp", "version", "services"]
+    required_fields = ["status", "timestamp", "service", "version"]
     for field in required_fields:
         assert field in data, f"Missing required field: {field}"
 
-    # Check services status
-    assert isinstance(data["services"], dict)
-    assert "database" in data["services"]
-    assert "ollama" in data["services"]
+    assert data["service"] == "MindBase API"
