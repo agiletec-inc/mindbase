@@ -76,7 +76,7 @@ class TestBaseCollector:
             def collect(self):
                 return []
 
-        collector = ConcreteCollector()
+        collector = ConcreteCollector(source_name="test")
         conv = Conversation(**sample_conversation_data)
 
         # Should validate successfully
@@ -92,7 +92,7 @@ class TestBaseCollector:
             def collect(self):
                 return []
 
-        collector = ConcreteCollector()
+        collector = ConcreteCollector(source_name="test")
 
         # Empty messages should fail validation
         invalid_conv = Conversation(
