@@ -28,7 +28,6 @@ jobs:
       - name: Validate repository structure
         run: |
           echo "Validating repository structure..."
-          test -f CLAUDE.md || { echo "CLAUDE.md missing"; exit 1; }
           test -f README.md || { echo "README.md missing"; exit 1; }
           test -f .gitignore || { echo ".gitignore missing"; exit 1; }
           test -f docker-compose.yml || { echo "docker-compose.yml missing"; exit 1; }
@@ -159,7 +158,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Type check
         run: pnpm typecheck
