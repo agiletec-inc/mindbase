@@ -99,7 +99,7 @@ async function publishToQiita(
     throw new Error(`Qiita API error: ${response.status} - ${error}`)
   }
 
-  return response.json()
+  return response.json() as Promise<QiitaResponse>
 }
 
 /**
