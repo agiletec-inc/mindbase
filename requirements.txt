@@ -30,7 +30,7 @@ psutil==6.1.0
 structlog==25.5.0
 
 # Testing
-pytest==9.0.2
+pytest==8.3.5
 pytest-asyncio==1.1.0
 pytest-cov==6.1.0
 pytest-httpx==0.35.0
