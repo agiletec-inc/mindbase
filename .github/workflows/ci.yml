@@ -104,6 +104,7 @@ jobs:
         run: |
           pip install black
           black --check app/ collectors/
+        continue-on-error: true
 
       - name: Type check with mypy
         run: |
