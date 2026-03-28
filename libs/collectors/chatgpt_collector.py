@@ -299,7 +299,9 @@ class ChatGPTCollector(BaseCollector):
                                 if conv:
                                     conversations.append(conv)
                             except Exception as exc:
-                                logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                                logger.debug(
+                                    f"Failed to parse JSON value for key {key}: {exc}"
+                                )
                                 self.stats["errors"] += 1
 
                 except Exception as exc:
@@ -672,8 +674,13 @@ class ChatGPTCollector(BaseCollector):
                         if isinstance(parts, list):
                             # Filter out non-string parts and empty strings
                             text_parts = [
-                                str(part) for part in parts
-                                if part and (isinstance(part, str) or isinstance(part, (int, float)))
+                                str(part)
+                                for part in parts
+                                if part
+                                and (
+                                    isinstance(part, str)
+                                    or isinstance(part, (int, float))
+                                )
                             ]
                             content = "\n".join(text_parts) if text_parts else ""
                         else:

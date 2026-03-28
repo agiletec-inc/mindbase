@@ -85,7 +85,7 @@ export interface StorageBackend {
 
   // Search operations
   search(query: string, threshold?: number): Promise<SearchResult[]>;
-  semanticSearch(query: string, limit?: number, threshold?: number): Promise<SearchResult[]>;
+  semanticSearch(query: string, limit?: number, threshold?: number, recencyWeight?: number, recencyTauSeconds?: number, recencyBoostDays?: number, recencyBoostValue?: number): Promise<SearchResult[]>;
   hybridSearch(query: string, options?: HybridSearchOptions): Promise<SearchResult[]>;
 
   // Session management

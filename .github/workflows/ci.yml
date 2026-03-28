@@ -6,7 +6,8 @@ name: CI
 on:
   push:
     branches:
-      - next
+      - main
+      - stg
   pull_request:
     branches:
       - main
@@ -28,7 +29,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Run tests
         run: pnpm test
@@ -36,29 +37,3 @@ jobs:
       - name: Build
         run: pnpm build
 
-  merge-to-main:
-    needs: test
-    if: github.ref == 'refs/heads/next' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{secrets.GITHUB_TOKEN}}
-
-      - name: Configure git
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-
-      - name: Merge next to main
-        run: |
-          git fetch origin main
-          git checkout main
-          git merge origin/next --no-edit
-          git push origin main
-
-          echo "✅ Merged next → main"

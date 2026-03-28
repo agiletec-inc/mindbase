@@ -331,7 +331,9 @@ class CursorCollector(BaseCollector):
                             if conv:
                                 conversations.append(conv)
                         except Exception as exc:
-                            logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                            logger.debug(
+                                f"Failed to parse JSON value for key {key}: {exc}"
+                            )
                             self.stats["errors"] += 1
 
             except Exception as exc:
@@ -753,7 +755,9 @@ class CursorCollector(BaseCollector):
                 title = f"Cursor Composer Session ({mode})"
                 for msg in messages:
                     if msg.role == "user" and msg.content:
-                        title = msg.content[:100] + ("..." if len(msg.content) > 100 else "")
+                        title = msg.content[:100] + (
+                            "..." if len(msg.content) > 100 else ""
+                        )
                         break
 
                 # Calculate updated_at from last message

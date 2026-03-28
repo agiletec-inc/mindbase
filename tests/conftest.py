@@ -207,7 +207,7 @@ def mock_ollama_response() -> dict:
 def stub_ollama_requests(monkeypatch, test_settings: Settings):
     """Stub Ollama HTTP calls to avoid hitting external services."""
     from httpx import Response, Request
-    from app.ollama_client import OllamaClient, ollama_client
+    from app.ollama_client import EmbeddingClient, ollama_client
 
     async def fake_request(self, method: str, path: str, **kwargs):
         request = Request(method, f"{self.base_url}{path}")
@@ -227,7 +227,7 @@ def stub_ollama_requests(monkeypatch, test_settings: Settings):
             )
         return Response(200, json={}, request=request)
 
-    monkeypatch.setattr(OllamaClient, "_request", fake_request, raising=False)
+    monkeypatch.setattr(EmbeddingClient, "_request", fake_request, raising=False)
 
     # Ensure shared client uses the same behaviour
     async def fake_embed(text: str):

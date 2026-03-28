@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List, Optional
 
-
 TOPIC_KEYWORDS: Dict[str, List[str]] = {
     "Docker-First Development": [
         "docker",

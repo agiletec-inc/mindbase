@@ -32,8 +32,11 @@ class EmbeddingClient:
 
         # Track which provider is active
         self._provider = "openai" if self.openai_api_key else "ollama"
-        logger.info("Embedding provider: %s (model: %s)", self._provider,
-                     self.openai_model if self._provider == "openai" else self.ollama_model)
+        logger.info(
+            "Embedding provider: %s (model: %s)",
+            self._provider,
+            self.openai_model if self._provider == "openai" else self.ollama_model,
+        )
 
     @property
     def model(self) -> str:
@@ -93,7 +96,9 @@ class EmbeddingClient:
                 results = await self._openai_embed([text])
                 return results[0]
             except Exception as exc:
-                logger.warning("OpenAI embedding failed, falling back to Ollama: %s", exc)
+                logger.warning(
+                    "OpenAI embedding failed, falling back to Ollama: %s", exc
+                )
                 self._provider = "ollama"
 
         return await self._ollama_embed(text)
@@ -115,7 +120,9 @@ class EmbeddingClient:
                     results.extend(batch_results)
                 return results
             except Exception as exc:
-                logger.warning("OpenAI batch embedding failed, falling back to Ollama: %s", exc)
+                logger.warning(
+                    "OpenAI batch embedding failed, falling back to Ollama: %s", exc
+                )
                 self._provider = "ollama"
 
         # Ollama: sequential embedding

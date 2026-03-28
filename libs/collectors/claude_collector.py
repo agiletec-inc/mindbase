@@ -280,7 +280,9 @@ class ClaudeDesktopCollector(BaseCollector):
                                 if conv:
                                     conversations.append(conv)
                             except Exception as exc:
-                                logger.debug(f"Failed to parse JSON value for key {key}: {exc}")
+                                logger.debug(
+                                    f"Failed to parse JSON value for key {key}: {exc}"
+                                )
                                 self.stats["errors"] += 1
 
                 except Exception as e:
@@ -405,7 +407,9 @@ class ClaudeDesktopCollector(BaseCollector):
                                 messages.append(parsed_msg)
 
                     except Exception as exc:
-                        logger.debug(f"Failed to parse message data for key {key}: {exc}")
+                        logger.debug(
+                            f"Failed to parse message data for key {key}: {exc}"
+                        )
                         self.stats["errors"] += 1
 
             if not messages:
