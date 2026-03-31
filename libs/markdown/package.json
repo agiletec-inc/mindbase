@@ -1,0 +1,7 @@
+{
+  "name": "@mindbase/markdown",
+  "version": "1.0.0",
+  "description": "Shared markdown frontmatter parser and serializer",
+  "type": "module",
+  "main": "frontmatter.ts"
+}

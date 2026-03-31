@@ -1,0 +1,7 @@
+{
+  "name": "@mindbase/embedding",
+  "version": "1.0.0",
+  "description": "Shared embedding client with OpenAI primary + Ollama fallback",
+  "type": "module",
+  "main": "embedding-client.ts"
+}

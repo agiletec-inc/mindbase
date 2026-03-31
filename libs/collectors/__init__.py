@@ -10,6 +10,9 @@ from .cursor_collector import CursorCollector
 from .windsurf_collector import WindsurfCollector
 from .gemini_collector import GeminiCollector
 from .data_normalizer import DataNormalizer
+from .parsing import parse_message, normalize_timestamp, normalize_role, extract_title
+from .deduplication import merge_conversations, get_conversation_hash
+from .validation import validate_data_quality, NormalizationStats
 
 __all__ = [
     "BaseCollector",
@@ -22,4 +25,12 @@ __all__ = [
     "WindsurfCollector",
     "GeminiCollector",
     "DataNormalizer",
+    "parse_message",
+    "normalize_timestamp",
+    "normalize_role",
+    "extract_title",
+    "merge_conversations",
+    "get_conversation_hash",
+    "validate_data_quality",
+    "NormalizationStats",
 ]

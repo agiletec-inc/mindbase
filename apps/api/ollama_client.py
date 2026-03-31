@@ -1,4 +1,7 @@
-"""Embedding client with OpenAI primary + Ollama fallback."""
+"""Embedding client with OpenAI primary + Ollama fallback.
+
+Model management (pull, delete, list) is delegated to services/model_manager.py.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +11,7 @@ from typing import Iterable, List
 import httpx
 
 from app.config import get_settings
+from app.services.model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +34,15 @@ class EmbeddingClient:
         self.ollama_model = ollama_model or settings.EMBEDDING_MODEL
         self.timeout = timeout
 
-        # Track which provider is active
         self._provider = "openai" if self.openai_api_key else "ollama"
         logger.info(
             "Embedding provider: %s (model: %s)",
             self._provider,
             self.openai_model if self._provider == "openai" else self.ollama_model,
         )
+
+        # Delegate model management
+        self._model_manager = ModelManager(ollama_url=self.ollama_url, timeout=timeout)
 
     @property
     def model(self) -> str:
@@ -60,17 +66,13 @@ class EmbeddingClient:
             "Authorization": f"Bearer {self.openai_api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
-            "model": self.openai_model,
-            "input": texts,
-        }
+        payload = {"model": self.openai_model, "input": texts}
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
 
-        # Sort by index to ensure correct ordering
         sorted_data = sorted(data["data"], key=lambda x: x["index"])
         return [item["embedding"] for item in sorted_data]
 
@@ -111,7 +113,6 @@ class EmbeddingClient:
 
         if self._provider == "openai":
             try:
-                # OpenAI supports batch embedding natively (max 2048 inputs)
                 results: List[List[float]] = []
                 batch_size = 2048
                 for i in range(0, len(text_list), batch_size):
@@ -125,7 +126,6 @@ class EmbeddingClient:
                 )
                 self._provider = "ollama"
 
-        # Ollama: sequential embedding
         embeddings: List[List[float]] = []
         for text in text_list:
             embeddings.append(await self._ollama_embed(text))
@@ -135,13 +135,11 @@ class EmbeddingClient:
         """Return True if the embedding service responds successfully."""
         if self._provider == "openai":
             try:
-                # Quick test with minimal input
                 await self._openai_embed(["test"])
                 return True
             except Exception as exc:
                 logger.warning("OpenAI health check failed: %s", exc)
 
-        # Fallback: check Ollama
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(f"{self.ollama_url}/api/version")
@@ -149,51 +147,25 @@ class EmbeddingClient:
         except httpx.HTTPError:
             return False
 
+    # Delegated model management
     async def list_models(self) -> List[str]:
-        """Retrieve installed Ollama model names."""
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(f"{self.ollama_url}/api/tags")
-                response.raise_for_status()
-                data = response.json()
-                return [model.get("name", "") for model in data.get("models", [])]
-        except httpx.HTTPError:
-            return []
+        return await self._model_manager.list_models()
 
     async def pull_model(self, model_name: str) -> bool:
-        """Ensure an Ollama model is available locally."""
-        try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
-                response = await client.post(
-                    f"{self.ollama_url}/api/pull", json={"model": model_name}
-                )
-                response.raise_for_status()
-                return True
-        except httpx.HTTPError:
-            return False
+        return await self._model_manager.pull_model(model_name)
 
     async def delete_model(self, model_name: str) -> bool:
-        """Delete a locally cached Ollama model."""
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.delete(
-                    f"{self.ollama_url}/api/models/{model_name}"
-                )
-                response.raise_for_status()
-                return True
-        except httpx.HTTPError:
-            return False
+        return await self._model_manager.delete_model(model_name)
 
+    # Compatibility wrappers
     async def generate_embedding(self, text: str) -> List[float]:
-        """Compatibility wrapper for integration tests."""
         return await self.embed(text)
 
     async def generate_batch_embeddings(
         self, texts: Iterable[str]
     ) -> List[List[float]]:
-        """Compatibility wrapper for integration tests."""
         return await self.embed_batch(texts)
 
 
-# Shared instance used by API routes (backward-compatible name)
+# Shared instance used by API routes
 ollama_client = EmbeddingClient()

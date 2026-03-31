@@ -1,7 +1,8 @@
 /**
- * MindBase MCP Server - Storage Interface
+ * MindBase MCP Server - Storage Interfaces
  *
- * Defines the contract for storage backends (PostgreSQL + pgvector)
+ * Composable interfaces split by responsibility.
+ * StorageBackend is the union type for backward compatibility.
  */
 
 export interface ConversationItem {
@@ -53,9 +54,7 @@ export interface HybridSearchOptions {
   recencyWeight?: number; // default 0.15
   threshold?: number; // 0-1, default 0.6
   limit?: number; // default 10
-  // Recency decay: score = exp(-age_seconds / tauSeconds)
   recencyTauSeconds?: number; // default 1209600 (14 days)
-  // Boost for very recent items
   recencyBoostDays?: number; // default 3
   recencyBoostValue?: number; // default 0.05
 }
@@ -63,43 +62,10 @@ export interface HybridSearchOptions {
 export interface SearchResult {
   item: ConversationItem;
   similarity?: number;
-  keywordScore?: number; // normalized 0-1
-  semanticScore?: number; // 0-1
-  recencyScore?: number; // 0-1 (with cap)
-  combinedScore?: number; // weighted sum of above
-}
-
-/**
- * Storage Backend Interface
- *
- * Abstraction layer for different storage implementations.
- * Current implementation: PostgreSQL + pgvector
- */
-export interface StorageBackend {
-  // Basic CRUD operations
-  save(item: ConversationItem): Promise<string>;
-  get(filters: QueryFilters): Promise<ConversationItem[]>;
-  getById(id: string): Promise<ConversationItem | null>;
-  delete(id: string): Promise<boolean>;
-  count(filters: Omit<QueryFilters, 'limit' | 'offset'>): Promise<number>;
-
-  // Search operations
-  search(query: string, threshold?: number): Promise<SearchResult[]>;
-  semanticSearch(query: string, limit?: number, threshold?: number, recencyWeight?: number, recencyTauSeconds?: number, recencyBoostDays?: number, recencyBoostValue?: number): Promise<SearchResult[]>;
-  hybridSearch(query: string, options?: HybridSearchOptions): Promise<SearchResult[]>;
-
-  // Session management
-  createSession(name: string, description?: string, parentId?: string): Promise<string>;
-  getSession(id: string): Promise<Session | null>;
-  listSessions(limit?: number): Promise<Session[]>;
-  deleteSession(id: string): Promise<boolean>;
-
-  // Timeline & topic queries
-  getTimeline(options?: TimelineOptions): Promise<TimelineEntry[]>;
-  getTopics(limit?: number, minCount?: number): Promise<TopicGroup[]>;
-
-  // Utility
-  close(): Promise<void>;
+  keywordScore?: number;
+  semanticScore?: number;
+  recencyScore?: number;
+  combinedScore?: number;
 }
 
 export interface TimelineOptions {
@@ -129,4 +95,41 @@ export interface TopicGroup {
   latestAt: Date;
   earliestAt: Date;
   conversationIds: string[];
+}
+
+// Composable interfaces by responsibility
+
+export interface ConversationStorage {
+  save(item: ConversationItem): Promise<string>;
+  get(filters: QueryFilters): Promise<ConversationItem[]>;
+  getById(id: string): Promise<ConversationItem | null>;
+  delete(id: string): Promise<boolean>;
+  count(filters: Omit<QueryFilters, 'limit' | 'offset'>): Promise<number>;
+}
+
+export interface SearchStorage {
+  search(query: string, threshold?: number): Promise<SearchResult[]>;
+  semanticSearch(query: string, limit?: number, threshold?: number, recencyWeight?: number, recencyTauSeconds?: number, recencyBoostDays?: number, recencyBoostValue?: number): Promise<SearchResult[]>;
+  hybridSearch(query: string, options?: HybridSearchOptions): Promise<SearchResult[]>;
+}
+
+export interface SessionStorage {
+  createSession(name: string, description?: string, parentId?: string): Promise<string>;
+  getSession(id: string): Promise<Session | null>;
+  listSessions(limit?: number): Promise<Session[]>;
+  deleteSession(id: string): Promise<boolean>;
+}
+
+export interface AnalyticsStorage {
+  getTimeline(options?: TimelineOptions): Promise<TimelineEntry[]>;
+  getTopics(limit?: number, minCount?: number): Promise<TopicGroup[]>;
+}
+
+/**
+ * Full storage backend — union of all composable interfaces.
+ * Kept for backward compatibility.
+ */
+export interface StorageBackend
+  extends ConversationStorage, SearchStorage, SessionStorage, AnalyticsStorage {
+  close(): Promise<void>;
 }
