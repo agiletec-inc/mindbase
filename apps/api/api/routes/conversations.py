@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.crud import conversation as crud
+from app import crud
 from app.database import get_db
 from app.ollama_client import ollama_client
 from app.schemas.conversation import (
