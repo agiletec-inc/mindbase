@@ -103,7 +103,9 @@ async def switch_active_model(request: ModelSwitchRequest):
     """Switch the active embedding model."""
     try:
         if request.model not in MODEL_CATALOG:
-            raise HTTPException(status_code=400, detail=f"Unknown model: {request.model}")
+            raise HTTPException(
+                status_code=400, detail=f"Unknown model: {request.model}"
+            )
 
         installed_models = await ollama_client.list_models()
         if request.model not in installed_models:
@@ -148,7 +150,9 @@ async def delete_model(model_name: str):
                 "message": f"Model {model_name} deleted successfully",
             }
         else:
-            raise HTTPException(status_code=404, detail=f"Model not found: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"Model not found: {model_name}"
+            )
     except HTTPException:
         raise
     except Exception as e:
@@ -184,7 +188,9 @@ async def get_system_specs():
             max_model_size=max_size,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get system specs: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get system specs: {str(e)}"
+        )
 
 
 @router.post("/generate", response_model=EmbeddingGenerateResponse)
@@ -198,4 +204,6 @@ async def generate_embedding(request: EmbeddingGenerateRequest):
             model=ollama_client.model,
         )
     except Exception as e:  # pragma: no cover - surfaced via API response
-        raise HTTPException(status_code=500, detail=f"Failed to generate embedding: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate embedding: {str(e)}"
+        )

@@ -34,8 +34,17 @@ class DataNormalizer:
         self.role_mappings = {
             "user": ["user", "human", "me", "question", "prompt", "input"],
             "assistant": [
-                "assistant", "ai", "bot", "claude", "chatgpt", "gpt",
-                "cursor", "windsurf", "response", "completion", "output",
+                "assistant",
+                "ai",
+                "bot",
+                "claude",
+                "chatgpt",
+                "gpt",
+                "cursor",
+                "windsurf",
+                "response",
+                "completion",
+                "output",
             ],
             "system": ["system", "instruction", "context"],
         }
@@ -71,10 +80,14 @@ class DataNormalizer:
                 self.stats.invalid_removed += 1
 
         self.stats.total_output = len(normalized)
-        logger.info(f"Normalization complete: {self.stats.total_output} conversations retained")
+        logger.info(
+            f"Normalization complete: {self.stats.total_output} conversations retained"
+        )
         return normalized
 
-    def _normalize_conversation(self, conversation: Conversation) -> Optional[Conversation]:
+    def _normalize_conversation(
+        self, conversation: Conversation
+    ) -> Optional[Conversation]:
         """Normalize a single conversation."""
         try:
             if not conversation.messages:
@@ -108,7 +121,9 @@ class DataNormalizer:
             if not conversation.metadata:
                 conversation.metadata = {}
             conversation.metadata["normalized"] = True
-            conversation.metadata["normalization_timestamp"] = datetime.now(timezone.utc).isoformat()
+            conversation.metadata["normalization_timestamp"] = datetime.now(
+                timezone.utc
+            ).isoformat()
 
             return conversation
         except Exception as e:

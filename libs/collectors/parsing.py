@@ -159,9 +159,7 @@ def normalize_timestamp(timestamp: Any) -> datetime:
     ISO strings, and various date formats.
     """
     if isinstance(timestamp, datetime):
-        return (
-            timestamp if timestamp.tzinfo else timestamp.replace(tzinfo=timezone.utc)
-        )
+        return timestamp if timestamp.tzinfo else timestamp.replace(tzinfo=timezone.utc)
 
     if isinstance(timestamp, (int, float)):
         if timestamp > 1e10:  # Milliseconds
@@ -238,7 +236,16 @@ def parse_message(
         metadata={
             k: v
             for k, v in msg_data.items()
-            if k not in {*ROLE_FIELDS, *CONTENT_FIELDS, *TIMESTAMP_FIELDS, "id", "message_id", "parent_id", "parentMessageId"}
+            if k
+            not in {
+                *ROLE_FIELDS,
+                *CONTENT_FIELDS,
+                *TIMESTAMP_FIELDS,
+                "id",
+                "message_id",
+                "parent_id",
+                "parentMessageId",
+            }
             and isinstance(v, (str, int, float, bool))
         },
     )
