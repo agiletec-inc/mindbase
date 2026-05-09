@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - stg
   pull_request:
     branches:
       - main
