@@ -164,11 +164,22 @@ jobs:
     needs: build-and-release
     runs-on: ubuntu-latest
     steps:
+      # Mint a short-lived token from the HOMEBREW_TAP_PUBLISHER GitHub
+      # App instead of a classic PAT (TAP_GITHUB_TOKEN), which expires
+      # and breaks the release silently. Same pattern as cmd-ime.
+      - name: Generate Homebrew tap App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.HOMEBREW_TAP_PUBLISHER_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_PUBLISHER_PRIVATE_KEY }}
+          owner: agiletec-inc
+          repositories: homebrew-tap
       - name: Checkout tap repository
         uses: actions/checkout@v4
         with:
           repository: agiletec-inc/homebrew-tap
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           path: tap
 
       - name: Extract version
@@ -224,4 +235,4 @@ jobs:
           git commit -m "Update mindbase-menubar to menubar-v${{ steps.version.outputs.VERSION }}"
           git push
         env:
-          GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
