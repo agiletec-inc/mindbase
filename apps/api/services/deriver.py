@@ -51,6 +51,12 @@ async def process_raw_conversation(
     text_content, message_count, raw_content = _extract_text_from_content(
         payload.content
     )
+    # Embed with the active provider. The vector is stored in
+    # conversation_embeddings (keyed by provider/model), not the legacy
+    # conversations.embedding column, so providers with different dimensions
+    # can coexist.
+    provider = ollama_client.active_provider
+    model = ollama_client.active_model
     embedding = await ollama_client.embed(text_content or " ")
 
     project = infer_project(
@@ -71,13 +77,15 @@ async def process_raw_conversation(
         db,
         payload,
         raw_record=raw_record,
-        embedding=embedding,
         workspace_path=workspace_path,
         message_count=message_count,
         raw_content=raw_content,
         project=project,
         topics=topics,
         metadata=metadata,
+    )
+    await crud.upsert_conversation_embedding(
+        db, conversation.id, provider, model, embedding
     )
 
     raw_record.processed_at = datetime.utcnow()

@@ -14,10 +14,12 @@ from app.schemas.conversation import (
     ConversationCreate,
     ConversationQueuedResponse,
     ConversationResponse,
+    ReembedRequest,
+    ReembedResponse,
     SearchQuery,
     SearchResult,
 )
-from app.services.deriver import process_raw_conversation
+from app.services.deriver import _extract_text_from_content, process_raw_conversation
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 logger = logging.getLogger(__name__)
@@ -78,18 +80,26 @@ async def search_conversations_endpoint(
     """
     Semantic search across conversations
 
-    - Generates query embedding using OpenAI text-embedding-3-large (Ollama fallback)
-    - Performs vector similarity search with pgvector
-    - Returns ranked results by similarity
+    - Embeds the query with the requested (or active) provider/model
+    - Scans that provider/model's vectors in conversation_embeddings
+    - Returns ranked results by similarity. Pass `provider`/`model` to compare
+      providers over the same query.
     """
     try:
-        # Generate query embedding
-        query_embedding = await ollama_client.embed(query.query)
+        # Resolve provider/model: the query must be embedded with the same model
+        # whose stored vectors we search against.
+        provider = query.provider or ollama_client.active_provider
+        model = query.model or ollama_client.default_model(provider)
 
-        # Search conversations
-        results = await crud.search_conversations(
+        query_embedding = await ollama_client.embed(
+            query.query, provider=provider, model=model
+        )
+
+        results = await crud.search_conversation_embeddings(
             db=db,
             query_embedding=query_embedding,
+            provider=provider,
+            model=model,
             limit=query.limit,
             threshold=query.threshold,
             source=query.source,
@@ -136,3 +146,51 @@ async def search_conversations_endpoint(
     except Exception as exc:  # pragma: no cover
         logger.exception("Failed to search conversations")
         raise HTTPException(status_code=500, detail=f"Search failed: {exc}") from exc
+
+
+@router.post("/reembed", response_model=ReembedResponse)
+async def reembed_conversations(
+    request: ReembedRequest, db: AsyncSession = Depends(get_db)
+):
+    """
+    Backfill embeddings for an existing corpus with another provider/model.
+
+    Conversations are ingested under the active provider only. To compare a
+    second provider, call this to embed conversations that don't yet have a
+    vector for the given provider/model. Idempotent: only missing ones are
+    embedded, so it can be called repeatedly until `remaining` reaches 0.
+    """
+    try:
+        model = request.model or ollama_client.default_model(request.provider)
+
+        pending = await crud.list_conversations_missing_embedding(
+            db, provider=request.provider, model=model, limit=request.limit
+        )
+
+        embedded = 0
+        for row in pending:
+            text_content, _, _ = _extract_text_from_content(row["content"])
+            vector = await ollama_client.embed(
+                text_content or " ", provider=request.provider, model=model
+            )
+            await crud.upsert_conversation_embedding(
+                db, row["id"], request.provider, model, vector
+            )
+            embedded += 1
+
+        await db.commit()
+
+        remaining = await crud.count_conversations_missing_embedding(
+            db, provider=request.provider, model=model
+        )
+
+        return ReembedResponse(
+            provider=request.provider,
+            model=model,
+            embedded=embedded,
+            remaining=remaining,
+        )
+
+    except Exception as exc:  # pragma: no cover
+        logger.exception("Failed to reembed conversations")
+        raise HTTPException(status_code=500, detail=f"Reembed failed: {exc}") from exc

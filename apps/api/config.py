@@ -15,11 +15,17 @@ class Settings(BaseSettings):
     # Database - REQUIRED from environment
     DATABASE_URL: str
 
-    # OpenAI Embedding (primary)
+    # Embedding provider selection: "ollama" | "openai".
+    # Explicit and config-driven — no implicit key-presence fallback. The active
+    # provider decides which embedder store/search use; per-provider vectors
+    # coexist in conversation_embeddings so providers can be compared.
+    EMBEDDING_PROVIDER: str = "ollama"
+
+    # OpenAI Embedding
     OPENAI_API_KEY: str | None = None
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-large"
 
-    # Ollama Embedding (fallback)
+    # Ollama Embedding
     OLLAMA_URL: str
     EMBEDDING_MODEL: str
     EMBEDDING_DIMENSIONS: int

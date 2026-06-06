@@ -5,9 +5,21 @@ from app.crud.conversation import (
     create_raw_conversation,
 )
 from app.crud.search import search_conversations
+from app.crud.embeddings import (
+    column_for_dim,
+    count_conversations_missing_embedding,
+    list_conversations_missing_embedding,
+    search_conversation_embeddings,
+    upsert_conversation_embedding,
+)
 
 __all__ = [
     "create_raw_conversation",
     "create_conversation_record",
     "search_conversations",
+    "column_for_dim",
+    "count_conversations_missing_embedding",
+    "list_conversations_missing_embedding",
+    "search_conversation_embeddings",
+    "upsert_conversation_embedding",
 ]

@@ -40,7 +40,7 @@ async def create_conversation_record(
     conversation: ConversationCreate,
     *,
     raw_record: RawConversation,
-    embedding: List[float],
+    embedding: Optional[List[float]] = None,
     workspace_path: Optional[str],
     message_count: int,
     raw_content: Optional[str],

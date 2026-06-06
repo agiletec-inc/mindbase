@@ -108,3 +108,51 @@ class Conversation(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - repr helper
         return f"<Conversation(id={self.id}, source={self.source}, title={self.title})>"
+
+
+# Dimension-bucket columns on ConversationEmbedding, keyed by vector length.
+# A row fills exactly one of these (the one matching its provider/model dim).
+EMBEDDING_DIM_COLUMNS = {768: "vec_768", 1024: "vec_1024", 3072: "vec_3072", 4096: "vec_4096"}
+
+
+class ConversationEmbedding(Base):
+    """One embedding per (conversation, provider, model).
+
+    Vectors from different models have different dimensions and are not
+    comparable, so each row stores its vector in the dimension-bucket column
+    matching its length. This lets OpenAI, bge-m3, qwen3-embedding, etc. coexist
+    for the same conversation so providers can be compared. See migration
+    20260606000000_conversation_embeddings.sql.
+    """
+
+    __tablename__ = "conversation_embeddings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+    dim = Column(Integer, nullable=False)
+    vec_768 = Column(Vector(768))
+    vec_1024 = Column(Vector(1024))
+    vec_3072 = Column(Vector(3072))
+    vec_4096 = Column(Vector(4096))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id",
+            "provider",
+            "model",
+            name="conversation_embeddings_conversation_id_provider_model_key",
+        ),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - repr helper
+        return (
+            f"<ConversationEmbedding(conversation_id={self.conversation_id}, "
+            f"provider={self.provider}, model={self.model}, dim={self.dim})>"
+        )
