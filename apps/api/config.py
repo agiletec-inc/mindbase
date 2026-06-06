@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str
     EMBEDDING_DIMENSIONS: int
 
+    # Max characters of input text per embedding call. Embedding models have a
+    # fixed context window (bge-m3: 8192 tokens) and error on overflow, so long
+    # transcripts are head-truncated to this budget before embedding. ~8000
+    # chars stays safely under 8192 tokens across Japanese/English/code.
+    EMBEDDING_MAX_CHARS: int = 8000
+
     # API
     DEBUG: bool = False
     API_TITLE: str = "MindBase API"

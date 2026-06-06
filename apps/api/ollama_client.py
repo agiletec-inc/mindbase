@@ -43,6 +43,7 @@ class EmbeddingClient:
         self.openai_model = openai_model or settings.OPENAI_EMBEDDING_MODEL
         self.ollama_url = (ollama_url or settings.OLLAMA_URL).rstrip("/")
         self.ollama_model = ollama_model or settings.EMBEDDING_MODEL
+        self.max_chars = settings.EMBEDDING_MAX_CHARS
         self.timeout = timeout
 
         logger.info(
@@ -81,6 +82,10 @@ class EmbeddingClient:
         prov = (provider or self.provider).lower()
         return prov, (model or self.default_model(prov))
 
+    def _clip(self, text: str) -> str:
+        """Head-truncate to the model's context budget to avoid overflow errors."""
+        return text[: self.max_chars]
+
     # ------------------------------------------------------------------ backends
     async def _openai_embed(self, texts: List[str], model: str) -> List[List[float]]:
         """Generate embeddings using the OpenAI API."""
@@ -104,13 +109,28 @@ class EmbeddingClient:
         return [item["embedding"] for item in sorted_data]
 
     async def _ollama_embed(self, text: str, model: str) -> List[float]:
-        """Generate an embedding using the Ollama API (single text)."""
-        url = f"{self.ollama_url}/api/embeddings"
-        payload = {"model": model, "prompt": text}
+        """Generate an embedding using the Ollama API (single text).
 
+        Token density varies (dense JSON/base64 in tool messages can exceed the
+        model context even after the char-based clip), so on a context-length
+        overflow the input is halved and retried until it fits.
+        """
+        url = f"{self.ollama_url}/api/embeddings"
+        prompt = text
         async with httpx.AsyncClient(timeout=300.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
+            while True:
+                response = await client.post(
+                    url, json={"model": model, "prompt": prompt}
+                )
+                if (
+                    response.status_code == 500
+                    and "context length" in response.text
+                    and len(prompt) > 256
+                ):
+                    prompt = prompt[: len(prompt) // 2]
+                    continue
+                response.raise_for_status()
+                break
             data = response.json()
 
         embedding = data.get("embedding") or data.get("embeddings", [None])[0]
@@ -124,6 +144,7 @@ class EmbeddingClient:
     ) -> List[float]:
         """Embed a single text with the active (or overridden) provider/model."""
         prov, mdl = self._resolve(provider, model)
+        text = self._clip(text)
         if prov == OPENAI:
             results = await self._openai_embed([text], mdl)
             return results[0]
@@ -143,6 +164,7 @@ class EmbeddingClient:
             return []
 
         prov, mdl = self._resolve(provider, model)
+        text_list = [self._clip(t) for t in text_list]
         if prov == OPENAI:
             results: List[List[float]] = []
             batch_size = 2048

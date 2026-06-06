@@ -41,11 +41,14 @@ async def upsert_conversation_embedding(
     """Insert or replace the embedding for one (conversation, provider, model)."""
     dim = len(vector)
     col = column_for_dim(dim)
+    # id is supplied here (gen_random_uuid) rather than relying on a column
+    # default: the table is created from the SQLAlchemy model, whose id default
+    # is Python-side (uuid.uuid4) and does not apply to this raw INSERT.
     stmt = text(
         f"""
         INSERT INTO conversation_embeddings
-            (conversation_id, provider, model, dim, {col})
-        VALUES (:cid, :provider, :model, :dim, CAST(:vec AS vector))
+            (id, conversation_id, provider, model, dim, {col})
+        VALUES (gen_random_uuid(), :cid, :provider, :model, :dim, CAST(:vec AS vector))
         ON CONFLICT (conversation_id, provider, model)
         DO UPDATE SET {col} = EXCLUDED.{col}, dim = EXCLUDED.dim, created_at = NOW()
         """
