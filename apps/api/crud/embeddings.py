@@ -44,15 +44,13 @@ async def upsert_conversation_embedding(
     # id is supplied here (gen_random_uuid) rather than relying on a column
     # default: the table is created from the SQLAlchemy model, whose id default
     # is Python-side (uuid.uuid4) and does not apply to this raw INSERT.
-    stmt = text(
-        f"""
+    stmt = text(f"""
         INSERT INTO conversation_embeddings
             (id, conversation_id, provider, model, dim, {col})
         VALUES (gen_random_uuid(), :cid, :provider, :model, :dim, CAST(:vec AS vector))
         ON CONFLICT (conversation_id, provider, model)
         DO UPDATE SET {col} = EXCLUDED.{col}, dim = EXCLUDED.dim, created_at = NOW()
-        """
-    )
+        """)
     await db.execute(
         stmt,
         {
@@ -72,8 +70,7 @@ async def list_conversations_missing_embedding(
     limit: int = 500,
 ) -> List[dict]:
     """Return conversations that have no embedding for the given provider/model."""
-    stmt = text(
-        """
+    stmt = text("""
         SELECT c.id, c.content, c.raw_content
         FROM conversations c
         WHERE NOT EXISTS (
@@ -84,8 +81,7 @@ async def list_conversations_missing_embedding(
         )
         ORDER BY c.created_at DESC
         LIMIT :limit
-        """
-    )
+        """)
     result = await db.execute(
         stmt, {"provider": provider, "model": model, "limit": limit}
     )
@@ -98,8 +94,7 @@ async def count_conversations_missing_embedding(
     model: str,
 ) -> int:
     """Count conversations with no embedding for the given provider/model."""
-    stmt = text(
-        """
+    stmt = text("""
         SELECT COUNT(*)
         FROM conversations c
         WHERE NOT EXISTS (
@@ -108,8 +103,7 @@ async def count_conversations_missing_embedding(
               AND e.provider = :provider
               AND e.model = :model
         )
-        """
-    )
+        """)
     result = await db.execute(stmt, {"provider": provider, "model": model})
     return int(result.scalar() or 0)
 

@@ -112,7 +112,12 @@ class Conversation(Base):
 
 # Dimension-bucket columns on ConversationEmbedding, keyed by vector length.
 # A row fills exactly one of these (the one matching its provider/model dim).
-EMBEDDING_DIM_COLUMNS = {768: "vec_768", 1024: "vec_1024", 3072: "vec_3072", 4096: "vec_4096"}
+EMBEDDING_DIM_COLUMNS = {
+    768: "vec_768",
+    1024: "vec_1024",
+    3072: "vec_3072",
+    4096: "vec_4096",
+}
 
 
 class ConversationEmbedding(Base):
