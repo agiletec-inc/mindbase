@@ -134,6 +134,16 @@ class SearchQuery(BaseModel):
     project: Optional[str] = Field(None, description="Filter by project identifier")
     topic: Optional[str] = Field(None, description="Filter by topic tag")
     workspace_path: Optional[str] = Field(None, description="Filter by workspace path")
+    provider: Optional[str] = Field(
+        None,
+        description="Embedding provider to search ('ollama'|'openai'); "
+        "defaults to the active EMBEDDING_PROVIDER",
+    )
+    model: Optional[str] = Field(
+        None,
+        description="Embedding model to search; defaults to the provider's "
+        "configured model. Must match a model already stored for comparison.",
+    )
 
     class Config:
         json_schema_extra = {
@@ -165,3 +175,30 @@ class SearchResult(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ReembedRequest(BaseModel):
+    """Backfill embeddings for an existing corpus with another provider/model.
+
+    Used to populate a second provider's vectors over conversations that were
+    ingested under a different provider, so the two can be compared.
+    """
+
+    provider: str = Field(..., description="Embedding provider ('ollama'|'openai')")
+    model: Optional[str] = Field(
+        None, description="Model name; defaults to the provider's configured model"
+    )
+    limit: int = Field(
+        500, description="Max conversations to (re)embed in one call", ge=1, le=5000
+    )
+
+
+class ReembedResponse(BaseModel):
+    """Result of a reembed backfill run."""
+
+    provider: str
+    model: str
+    embedded: int = Field(..., description="Conversations embedded in this call")
+    remaining: int = Field(
+        ..., description="Conversations still missing this provider/model embedding"
+    )

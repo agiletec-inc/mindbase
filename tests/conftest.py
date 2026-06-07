@@ -229,11 +229,12 @@ def stub_ollama_requests(monkeypatch, test_settings: Settings):
 
     monkeypatch.setattr(EmbeddingClient, "_request", fake_request, raising=False)
 
-    # Ensure shared client uses the same behaviour
-    async def fake_embed(text: str):
+    # Ensure shared client uses the same behaviour. Signatures mirror
+    # EmbeddingClient.embed/embed_batch, which accept provider/model overrides.
+    async def fake_embed(text: str, provider: str | None = None, model: str | None = None):
         return [0.1] * test_settings.EMBEDDING_DIMENSIONS
 
-    async def fake_embed_batch(texts):
+    async def fake_embed_batch(texts, provider: str | None = None, model: str | None = None):
         return [[0.1] * test_settings.EMBEDDING_DIMENSIONS for _ in texts]
 
     monkeypatch.setattr(ollama_client, "embed", fake_embed, raising=False)

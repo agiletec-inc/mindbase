@@ -15,14 +15,26 @@ class Settings(BaseSettings):
     # Database - REQUIRED from environment
     DATABASE_URL: str
 
-    # OpenAI Embedding (primary)
+    # Embedding provider selection: "ollama" | "openai".
+    # Explicit and config-driven — no implicit key-presence fallback. The active
+    # provider decides which embedder store/search use; per-provider vectors
+    # coexist in conversation_embeddings so providers can be compared.
+    EMBEDDING_PROVIDER: str = "ollama"
+
+    # OpenAI Embedding
     OPENAI_API_KEY: str | None = None
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-large"
 
-    # Ollama Embedding (fallback)
+    # Ollama Embedding
     OLLAMA_URL: str
     EMBEDDING_MODEL: str
     EMBEDDING_DIMENSIONS: int
+
+    # Max characters of input text per embedding call. Embedding models have a
+    # fixed context window (bge-m3: 8192 tokens) and error on overflow, so long
+    # transcripts are head-truncated to this budget before embedding. ~8000
+    # chars stays safely under 8192 tokens across Japanese/English/code.
+    EMBEDDING_MAX_CHARS: int = 8000
 
     # API
     DEBUG: bool = False
