@@ -263,6 +263,12 @@ Explore other tools in the AIRIS ecosystem:
 
 MindBase is released under the [MIT License](LICENSE).
 
+## 💖 Support
+
+[agiletec](https://github.com/agiletec-inc) is a one-person studio building these tools full-time and open source. If they earn a spot in your workflow, a sponsorship keeps them maintained and independent.
+
+[![Sponsor agiletec](https://img.shields.io/badge/Sponsor-agiletec-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/agiletec-inc)
+
 ---
 
 **Built with ❤️ by the [Agiletec](https://github.com/agiletec-inc) team**
