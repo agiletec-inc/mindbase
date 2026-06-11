@@ -122,7 +122,7 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 
 ```bash
 # 1. Clone (adjust the destination if needed)
-git clone https://github.com/kazukinakai/mindbase.git ~/github/mindbase
+git clone https://github.com/agiletec-inc/mindbase.git ~/github/mindbase
 cd ~/github/mindbase
 
 # 2. Copy environment defaults
@@ -256,17 +256,6 @@ Explore other tools in the AIRIS ecosystem:
 - **[cmd-ime](https://github.com/agiletec-inc/cmd-ime)** - macOS IME switcher (Cmd key toggle)
 - **[neural](https://github.com/agiletec-inc/neural)** - Local LLM translation tool (DeepL alternative)
 - **[airiscode](https://github.com/agiletec-inc/airiscode)** - Terminal-first autonomous coding agent
-
----
-
-## 💖 Support This Project
-
-If you find MindBase helpful, consider supporting its development:
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/kazukinakad)
-[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-sponsor-pink?style=for-the-badge&logo=github)](https://github.com/sponsors/kazukinakad)
-
-Your support helps maintain and improve all AIRIS projects!
 
 ---
 

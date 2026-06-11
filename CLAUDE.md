@@ -47,11 +47,11 @@ airis api-shell       # Enter container, then run commands inside
 
 **MindBase** is the memory substrate of the AIRIS ecosystem - a local-first AI conversation knowledge management system with semantic search via PostgreSQL + pgvector + Ollama.
 
-**Key Integration**: Part of [AIRIS MCP Gateway](https://github.com/agiletec-inc/airis-mcp-gateway) which provides unified MCP access. MindBase exposes `mindbase_search` and `mindbase_store` tools.
+**Key Integration**: Part of [AIRIS MCP Gateway](https://github.com/agiletec-inc/airis-mcp-gateway) which provides unified MCP access. MindBase exposes `conversation_save`, `conversation_hybrid_search`, and `memory_search` tools.
 
 **Stack**: Hybrid Python/TypeScript pnpm monorepo
 - **Storage**: PostgreSQL 17 + pgvector
-- **Embeddings**: OpenAI text-embedding-3-large (3072-dim, primary) → Ollama qwen3-embedding:8b (1024-dim, fallback)
+- **Embeddings**: Config-driven dual-provider — Ollama (default, `EMBEDDING_PROVIDER=ollama`) or OpenAI; default model `bge-m3` (1024-dim). Set `EMBEDDING_PROVIDER=openai` for OpenAI `text-embedding-3-large` (3072-dim)
 - **API**: FastAPI (Python)
 - **MCP Server**: TypeScript (stdio transport)
 
@@ -102,7 +102,9 @@ apps/
 
 libs/
 ├── collectors/       # Python conversation collectors (Claude, Cursor, ChatGPT, etc.)
+├── embedding/        # TypeScript embedding client
 ├── generators/       # TypeScript article generators (Qiita, Zenn, Note publishing)
+├── markdown/         # TypeScript markdown utilities
 ├── processors/       # TypeScript content processors
 └── shared/           # Shared TypeScript types
 
@@ -138,11 +140,13 @@ tests/                # pytest tests (unit/integration/e2e markers)
 
 ### Embedding Strategy (Dual Provider)
 
-- **Primary**: OpenAI `text-embedding-3-large` (3072-dim) — requires `OPENAI_API_KEY`
-- **Fallback**: Ollama `qwen3-embedding:8b` (1024-dim) — local, free
-- Both Python (`ollama_client.py`) and TypeScript (`storage/postgres.ts`) implement the same fallback logic
-- Dimensions auto-detected; override with `EMBEDDING_DIMENSIONS`
-- Index: ivfflat for pgvector similarity search
+- **Config-driven**: `EMBEDDING_PROVIDER=ollama` (default) or `EMBEDDING_PROVIDER=openai` — no implicit key-presence fallback; a misconfigured provider raises immediately
+- **Ollama** (default): model set by `EMBEDDING_MODEL` (`.env.example` default: `bge-m3`, 1024-dim)
+- **OpenAI**: `text-embedding-3-large` (3072-dim) — requires `OPENAI_API_KEY`
+- Per-provider vectors coexist in `conversation_embeddings` table; switching provider does not destroy existing vectors. Use `POST /conversations/reembed` to backfill
+- Dimensions auto-detected from model name; override with `EMBEDDING_DIMENSIONS`
+- Both Python (`apps/api/ollama_client.py`) and TypeScript (`storage/postgres.ts`) use `EMBEDDING_PROVIDER` config
+- pgvector index: **no ANN index** on `conversation_embeddings` (pgvector 0.8 caps ivfflat/hnsw at 2000 dims for `vector`; exact cosine scan is used instead)
 
 ### Data Pipeline (Raw → Derived)
 
@@ -174,8 +178,7 @@ Tuning via env vars: `SEARCH_RECENCY_TAU_SECONDS` (14d default), `SEARCH_RECENCY
 
 ### CI/CD
 
-- Push to `next` or PR to `main` で CI 実行 (pnpm install → test → build)
-- `next` → `main` はCI成功時に自動マージ
+- Push to `main` or PR to `main` で CI 実行 (pnpm install → test → build)
 - ワークフロー: `.github/workflows/ci.yml` (auto-generated from manifest.toml)
 
 ## Development Conventions
