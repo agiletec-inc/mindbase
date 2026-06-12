@@ -40,6 +40,9 @@ export function createDispatcher(
     content_generate: (args) => tools.contentGenerate(args),
     content_publish: (args) => tools.contentPublish(args),
 
+    // Retrieval pack
+    mindbase_draft: (args) => tools.mindbaseDraft(args),
+
     // Memory
     memory_write: (args) => memoryTools.memoryWrite(args),
     memory_read: (args) => memoryTools.memoryRead(args),
