@@ -20,25 +20,21 @@ DATABASE_URL = os.getenv("DATABASE_URL")  # Required - fail fast if missing
 
 See `.env.example` for all required variables. Apps must fail fast with clear errors if env vars are missing.
 
-### 2. Auto-Generated Files - Do Not Edit
+### 2. Workspace files
 
-These files are generated from `manifest.toml` via `airis init`:
-- `package.json` (root)
-- `pnpm-workspace.yaml`
+`pnpm-workspace.yaml` と `package.json` (root) は**手動管理の SSoT** — 直接編集してよい。
+(旧記載の「`airis init` で生成」は誤り: `airis init` は存在しない。`airis workspace gen` は
+`compose.yaml` / `tsconfig.*` を生成するだけで、これらの workspace ファイルは生成しない。)
 
-**Edit `manifest.toml` instead, then run `airis init` to regenerate.**
+### 3. ローカル開発 = docker compose
 
-### 3. Docker-First Development
-
-Host package manager commands are forbidden. Use `airis` commands:
+mindbase の stack はコンテナ(PostgreSQL + pgvector + Ollama + FastAPI)。host-native は org 全体の
+既定だが、本 repo は stack がコンテナなのでローカルも `docker compose` で起動するのが parity。
+Python は api コンテナ内で動く(`command: uvicorn app.main:app --reload`)。
 
 ```bash
-# ❌ FORBIDDEN on host
-npm install / pnpm install / yarn install
-
-# ✅ USE INSTEAD
-airis up              # Start services
-airis api-shell       # Enter container, then run commands inside
+docker compose up -d                  # Start services
+docker compose exec api bash          # Enter the API container for Python work
 ```
 
 ---
@@ -60,28 +56,28 @@ airis api-shell       # Enter container, then run commands inside
 ### Development Setup
 
 ```bash
-cp .env.example .env          # Configure environment
-airis up                      # Start PostgreSQL + API
-airis model-pull              # Download embedding model (~4.7GB, first time only)
-airis migrate                 # Run database migrations
-airis health                  # Verify all services running
+cp .env.example .env                            # Configure environment
+docker compose up -d                            # Start PostgreSQL + API + Ollama
+docker compose exec ollama ollama pull bge-m3   # Download embedding model (~4.7GB, first time only)
+docker compose ps                               # Verify services healthy
 ```
+
+DB migrations は postgres 起動時に `./supabase/migrations` (initdb.d) から自動適用される。
 
 ### Common Commands
 
 | Command | Description |
 |---------|-------------|
-| `airis up` | Start all services |
-| `airis down` | Stop all services |
-| `airis restart` | Restart all services |
-| `airis logs` | View all logs |
-| `airis ps` | Show container status |
-| `airis api-shell` | Enter API container for Python work |
-| `airis db-shell` | Enter PostgreSQL shell |
-| `airis test` | Run all tests |
-| `airis health` | Check service health |
-| `airis migrate` | Run database migrations |
-| `airis model-pull` | Download embedding model |
+| `docker compose up -d` | Start all services |
+| `docker compose down` | Stop all services |
+| `docker compose restart` | Restart all services |
+| `docker compose logs -f` | View all logs |
+| `docker compose ps` | Show container status & health |
+| `docker compose exec api bash` | Enter API container for Python work |
+| `docker compose exec postgres psql -U mindbase mindbase_dev` | Enter PostgreSQL shell |
+| `docker compose exec api pytest` | Run all tests |
+| `curl -fsS localhost:${API_PORT:-18003}/health` | Check API health |
+| `docker compose exec ollama ollama pull bge-m3` | Download embedding model |
 
 ### Service Endpoints (configured via .env)
 
@@ -203,7 +199,7 @@ Tuning via env vars: `SEARCH_RECENCY_TAU_SECONDS` (14d default), `SEARCH_RECENCY
 ### Testing
 
 ```bash
-# Inside Docker container (airis api-shell)
+# Inside the api container (docker compose exec api bash)
 pytest tests/ -v                          # All tests
 pytest -m unit -v                         # Unit tests only
 pytest -m integration -v                  # Integration tests
@@ -216,7 +212,7 @@ ruff check apps/api/ libs/collectors/     # Lint
 mypy apps/api/ libs/collectors/           # Type check
 
 # TypeScript
-airis typecheck
+docker compose exec workspace pnpm typecheck
 ```
 
 ## Common Tasks
@@ -235,9 +231,9 @@ airis typecheck
 
 ## Troubleshooting
 
-**"Ollama model not found"**: `airis model-pull`
+**"Ollama model not found"**: `docker compose exec ollama ollama pull bge-m3`
 
-**"Database connection refused"**: `airis health` then `airis restart`
+**"Database connection refused"**: `docker compose ps` (check health) then `docker compose restart`
 
 **"Permission denied for Application Support"**:
 ```bash
