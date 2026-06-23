@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.models.conversation import Conversation, RawConversation
@@ -69,3 +71,32 @@ async def create_conversation_record(
     await db.flush()
     await db.refresh(db_conversation)
     return db_conversation
+
+
+async def list_conversations(
+    db: AsyncSession,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    source: Optional[str] = None,
+    project: Optional[str] = None,
+) -> List[Conversation]:
+    """Return derived conversations, newest first (backend is the store-of-record)."""
+    stmt = select(Conversation).order_by(Conversation.created_at.desc())
+    if source:
+        stmt = stmt.where(Conversation.source == source)
+    if project:
+        stmt = stmt.where(Conversation.project == project)
+    stmt = stmt.limit(limit).offset(offset)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_conversation(
+    db: AsyncSession, conversation_id: UUID
+) -> Optional[Conversation]:
+    """Fetch a single derived conversation by id (with its full content payload)."""
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    return result.scalar_one_or_none()

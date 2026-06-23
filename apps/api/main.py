@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.config import get_settings
 from apps.api.api.routes import (
+    chat,
     control,
     conversations,
     embeddings,
@@ -34,6 +35,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(conversations.router)
 app.include_router(embeddings.router)
+app.include_router(chat.router)
 app.include_router(settings_routes.router)
 app.include_router(control.router)
 

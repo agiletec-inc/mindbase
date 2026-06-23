@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     # (crud.column_for_dim). Kept only for the legacy conversations.embedding column.
     EMBEDDING_DIMENSIONS: int = 1024
 
+    # Chat (LLM) — seed defaults only. The live source of truth is the settings
+    # store (services/settings_store.get_chat_settings); these seed it when unset.
+    CHAT_MODEL: str = "qwen2.5:3b"
+    CHAT_TEMPERATURE: float = 0.7
+    CHAT_MAX_TOKENS: int = 2048
+    CHAT_SYSTEM_PROMPT: str = (
+        "You are MindBase, a helpful assistant with access to the user's past "
+        "conversations. Use the provided context when relevant."
+    )
+
     # Max characters of input text per embedding call. Embedding models have a
     # fixed context window (bge-m3: 8192 tokens) and error on overflow, so long
     # transcripts are head-truncated to this budget before embedding. ~8000

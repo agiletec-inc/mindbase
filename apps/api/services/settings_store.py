@@ -89,6 +89,47 @@ def set_active_embedding(provider: str, model: str) -> tuple[str, str]:
     return provider, model
 
 
+def get_chat_settings() -> Dict[str, Any]:
+    """Single source of truth for chat (LLM) settings.
+
+    Reads the persisted settings store first; env (``config.Settings``) only seeds
+    each field when unset. Mirrors get_active_embedding so the chat client can be a
+    thin renderer that owns no domain state of its own.
+    """
+    from apps.api.config import get_settings  # lazy: avoid import cycle
+
+    data = load_settings()
+    s = get_settings()
+    temperature = data.get("chatTemperature")
+    return {
+        "model": data.get("chatModel") or s.CHAT_MODEL,
+        "temperature": temperature if temperature is not None else s.CHAT_TEMPERATURE,
+        "maxTokens": data.get("chatMaxTokens") or s.CHAT_MAX_TOKENS,
+        "systemPrompt": data.get("chatSystemPrompt") or s.CHAT_SYSTEM_PROMPT,
+    }
+
+
+def set_chat_settings(
+    *,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    system_prompt: str | None = None,
+) -> Dict[str, Any]:
+    """Persist any provided chat settings to the store (others left unchanged)."""
+    data = load_settings()
+    if model is not None:
+        data["chatModel"] = model
+    if temperature is not None:
+        data["chatTemperature"] = temperature
+    if max_tokens is not None:
+        data["chatMaxTokens"] = max_tokens
+    if system_prompt is not None:
+        data["chatSystemPrompt"] = system_prompt
+    save_settings(data)
+    return get_chat_settings()
+
+
 def get_repo_root(default: Optional[str] = None) -> Path:
     """Resolve repo root from settings or fallback."""
     data = load_settings()
