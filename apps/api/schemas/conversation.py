@@ -84,6 +84,23 @@ class ConversationResponse(BaseModel):
         from_attributes = True
 
 
+class ConversationSummary(BaseModel):
+    """Lightweight conversation row for list views (no full content payload)."""
+
+    id: UUID
+    source: str
+    title: Optional[str]
+    project: Optional[str]
+    topics: List[str] = Field(default_factory=list)
+    message_count: int
+    workspace_path: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ConversationQueuedResponse(BaseModel):
     """Schema returned when derivation is queued."""
 
@@ -119,6 +136,14 @@ class AppSettings(BaseModel):
     embeddingModel: Optional[str] = Field(
         None, description="Active embedding model name (from the model catalog)"
     )
+    # Chat (LLM) selection — also a single source of truth, persisted here.
+    # Null means "unset": the API seeds these from env defaults on read.
+    chatModel: Optional[str] = Field(None, description="Active chat (LLM) model")
+    chatTemperature: Optional[float] = Field(
+        None, description="Chat sampling temperature"
+    )
+    chatMaxTokens: Optional[int] = Field(None, description="Chat max output tokens")
+    chatSystemPrompt: Optional[str] = Field(None, description="Chat system prompt")
     collectors: List[CollectorConfig] = Field(default_factory=list)
     pipelines: List[PipelineConfig] = Field(default_factory=list)
 

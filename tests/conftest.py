@@ -240,6 +240,22 @@ def stub_ollama_requests(monkeypatch, test_settings: Settings):
     monkeypatch.setattr(ollama_client, "embed", fake_embed, raising=False)
     monkeypatch.setattr(ollama_client, "embed_batch", fake_embed_batch, raising=False)
 
+    async def fake_list_models():
+        return ["bge-m3", "qwen2.5:3b"]
+
+    monkeypatch.setattr(ollama_client, "list_models", fake_list_models, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def isolate_settings_store(tmp_path, monkeypatch):
+    """Point the settings store at a per-test temp file so tests never touch the
+    real ~/.config/mindbase/settings.json (the embedding/chat SSoT lives there)."""
+    from apps.api.services import settings_store
+
+    settings_store.override_settings_path(tmp_path / "settings.json")
+    yield
+    settings_store.override_settings_path(None)
+
 
 @pytest.fixture
 def sample_conversation_messages() -> list[dict[str, str]]:

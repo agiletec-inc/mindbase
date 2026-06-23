@@ -8,17 +8,26 @@ from apps.api.services import settings_store
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-def _with_active_embedding(data: dict) -> AppSettings:
-    """Render AppSettings, always reflecting the live active embedding (SSoT)."""
+def _render(data: dict) -> AppSettings:
+    """Render AppSettings, always reflecting the live SSoT (embedding + chat)."""
     provider, model = settings_store.get_active_embedding()
-    merged = {**data, "embeddingProvider": provider, "embeddingModel": model}
+    chat = settings_store.get_chat_settings()
+    merged = {
+        **data,
+        "embeddingProvider": provider,
+        "embeddingModel": model,
+        "chatModel": chat["model"],
+        "chatTemperature": chat["temperature"],
+        "chatMaxTokens": chat["maxTokens"],
+        "chatSystemPrompt": chat["systemPrompt"],
+    }
     return AppSettings(**merged)
 
 
 @router.get("", response_model=AppSettings)
 async def get_settings() -> AppSettings:
     try:
-        return _with_active_embedding(settings_store.load_settings())
+        return _render(settings_store.load_settings())
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Invalid settings file: {exc}"
@@ -36,5 +45,27 @@ async def update_settings(payload: AppSettings) -> AppSettings:
         provider = payload.embeddingProvider or current[0]
         model = payload.embeddingModel or current[1]
         merged["embeddingProvider"], merged["embeddingModel"] = provider, model
+    # Chat selection persists through its single setter too.
+    if any(
+        v is not None
+        for v in (
+            payload.chatModel,
+            payload.chatTemperature,
+            payload.chatMaxTokens,
+            payload.chatSystemPrompt,
+        )
+    ):
+        chat = settings_store.set_chat_settings(
+            model=payload.chatModel,
+            temperature=payload.chatTemperature,
+            max_tokens=payload.chatMaxTokens,
+            system_prompt=payload.chatSystemPrompt,
+        )
+        merged.update(
+            chatModel=chat["model"],
+            chatTemperature=chat["temperature"],
+            chatMaxTokens=chat["maxTokens"],
+            chatSystemPrompt=chat["systemPrompt"],
+        )
     settings_store.save_settings(merged)
-    return _with_active_embedding(merged)
+    return _render(merged)

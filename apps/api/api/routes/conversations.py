@@ -2,8 +2,9 @@
 
 import logging
 from datetime import datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.config import get_settings
@@ -17,6 +18,7 @@ from apps.api.schemas.conversation import (
     ConversationCreate,
     ConversationQueuedResponse,
     ConversationResponse,
+    ConversationSummary,
     ReembedRequest,
     ReembedResponse,
     SearchQuery,
@@ -55,6 +57,47 @@ def _format_result(row) -> SearchResult:
         raw_id=row.raw_id,
         created_at=row.created_at,
         content_preview=preview,
+    )
+
+
+@router.get("", response_model=list[ConversationSummary])
+async def list_conversations_endpoint(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    source: str | None = Query(None),
+    project: str | None = Query(None),
+):
+    """List derived conversations (newest first). Backend is the store-of-record,
+    so clients render this instead of keeping their own local copy."""
+    rows = await crud.list_conversations(
+        db, limit=limit, offset=offset, source=source, project=project
+    )
+    return [ConversationSummary.model_validate(row) for row in rows]
+
+
+@router.get("/{conversation_id}", response_model=ConversationResponse)
+async def get_conversation_endpoint(
+    conversation_id: UUID, db: AsyncSession = Depends(get_db)
+):
+    """Fetch a single conversation with its full content payload."""
+    row = await crud.get_conversation(db, conversation_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return ConversationResponse(
+        id=row.id,
+        raw_id=row.raw_id,
+        source=row.source,
+        source_conversation_id=row.source_conversation_id,
+        title=row.title,
+        content=row.content,
+        metadata=row.conv_metadata or {},
+        message_count=row.message_count,
+        project=row.project,
+        topics=row.topics or [],
+        workspace_path=row.workspace_path,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 
