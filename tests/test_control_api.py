@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient
 
-from app.services import settings_store
+from apps.api.services import settings_store
 
 
 @pytest.mark.asyncio

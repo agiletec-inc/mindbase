@@ -39,7 +39,9 @@ If you need to run MindBase independently:
 
 ```bash
 git clone https://github.com/agiletec-inc/mindbase.git ~/github/mindbase
-cd ~/github/mindbase && make up
+cd ~/github/mindbase
+cp .env.example .env && uv sync --all-packages && docker compose up -d postgres
+uv run python -m uvicorn apps.api.main:app --reload --port 18003   # see Quick start below
 ```
 
 **What you get with the full suite:**
@@ -120,6 +122,9 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 
 ## Quick start
 
+Requirements: Docker (OrbStack works), [uv](https://docs.astral.sh/uv/), and a host
+[Ollama](https://ollama.com). The API runs host-native; only Postgres runs in Docker.
+
 ```bash
 # 1. Clone (adjust the destination if needed)
 git clone https://github.com/agiletec-inc/mindbase.git ~/github/mindbase
@@ -128,23 +133,27 @@ cd ~/github/mindbase
 # 2. Copy environment defaults
 cp .env.example .env
 
-# 3. Boot Postgres + API + (optional) Ollama container
-make up
+# 3. Install Python deps into one workspace venv (uv reads .python-version → 3.12)
+uv sync --all-packages
 
-# 4. Download the embedding model once (~5–10 minutes)
-make model-pull
+# 4. Pull the embedding model once into your host Ollama
+ollama pull bge-m3
 
-# 5. Apply database migrations
-make migrate
+# 5. Start Postgres (pgvector). Migrations in supabase/migrations/ apply
+#    automatically on first volume init.
+docker compose up -d postgres
 
-# 6. Check service health
-make health  # API lives at http://localhost:18002
+# 6. Run the API on the host (talks to the host Ollama over localhost)
+uv run python -m uvicorn apps.api.main:app --reload --port 18003
 
-# 7. (Optional) Run the raw derivation worker
-make worker
+# 7. Check health (in another shell)
+curl -fsS http://localhost:18003/health   # → ok ; interactive docs at /docs
+
+# 8. (Optional) Run the raw derivation worker
+uv run python -m apps.api.workers.raw_deriver
 ```
 
-All conversation data lives in the PostgreSQL volume declared in `docker-compose.yml` (`postgres_data_dev`). Remove that volume when you want a clean slate; nothing is written to random App Support folders.
+All conversation data lives in the PostgreSQL volume declared in `compose.yml` (`postgres_data_dev`). Remove that volume (`docker compose down -v`) when you want a clean slate; nothing is written to random App Support folders.
 
 ### Menu bar companion ✨ Auto-Collection
 
@@ -155,7 +164,7 @@ A lightweight Electron menu bar app that **automatically collects AI conversatio
 - **File System Watcher**: Monitors `~/.claude/`, `~/.cursor/`, `~/Library/Application Support/Windsurf/`, etc.
 - **Auto-Collector Execution**: Runs Python collectors when new conversations are detected
 - **Health Monitoring**: Shows API, database, and Ollama status (🟢🟡🔴)
-- **Quick Commands**: One-click `make up/down/logs/worker`
+- **Quick Commands**: One-click `docker compose up -d postgres` / API start / logs
 
 **Setup:**
 ```bash
@@ -173,7 +182,7 @@ Use **Settings…** to update the API base URL, workspace root, repository path,
 **Store a conversation**
 
 ```bash
-curl -X POST http://localhost:18002/conversations/store \
+curl -X POST http://localhost:18003/conversations/store \
   -H "Content-Type: application/json" \
   -d '{
     "source": "cursor",
@@ -197,7 +206,7 @@ curl -X POST http://localhost:18002/conversations/store \
 **Run a semantic search**
 
 ```bash
-curl -X POST http://localhost:18002/conversations/search \
+curl -X POST http://localhost:18003/conversations/search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "autonomous PM agent reflection pattern",
@@ -219,7 +228,7 @@ Responses include similarity scores, timestamps, metadata, and the original mess
 
 ## Data residency & privacy
 
-- Conversations, embeddings, and metadata stay inside the Docker-managed Postgres volume. Stop the stack with `make down` and the data remains encrypted on disk via PostgreSQL.
+- Conversations, embeddings, and metadata stay inside the Docker-managed Postgres volume. Stop the stack with `docker compose down` and the data remains on disk in the `postgres_data_dev` volume.
 - All embeddings are generated locally through Ollama, so you never leak prompts or code to third-party APIs.
 - If you need off-device backups, dump the database (`pg_dump`) or replicate the Docker volume; there is no hidden shadow copy under `~/Library/Application Support`.
 
@@ -237,8 +246,8 @@ Responses include similarity scores, timestamps, metadata, and the original mess
 2. Follow the style guides in `docs/`, `AGENTS.md`, and `CLAUDE.md`.
 3. Run the validations before opening a PR:
    ```bash
-   make lint
-   make health
+   uv run pytest tests/ -v
+   uv run black --check apps/api/ libs/collectors/ && uv run ruff check apps/api/ libs/collectors/
    pnpm lint
    ```
 4. Open the PR with a Conventional Commit title, describe the change, list the commands you ran, and attach API traces or screenshots when relevant.

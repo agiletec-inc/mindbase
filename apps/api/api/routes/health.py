@@ -6,8 +6,8 @@ from datetime import datetime
 from fastapi import APIRouter
 from sqlalchemy import text
 
-from app.database import engine
-from app.ollama_client import ollama_client
+from apps.api.database import engine
+from apps.api.ollama_client import ollama_client
 
 logger = logging.getLogger(__name__)
 

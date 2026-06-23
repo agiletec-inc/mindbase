@@ -46,8 +46,9 @@ default, 2026-05-23) for the SSoT. For MindBase that means:
 native runner or `docker compose` directly.
 
 ```bash
+uv sync --all-packages                    # One workspace venv (apps/api + libs/collectors)
 docker compose up -d postgres             # Start the local Postgres (pgvector) dependency
-uvicorn app.main:app --reload --port "${API_PORT:-18003}"   # Run the API on the host
+uv run python -m uvicorn apps.api.main:app --reload --port "${API_PORT:-18003}"   # Run the API
 ```
 
 ---
@@ -70,26 +71,25 @@ uvicorn app.main:app --reload --port "${API_PORT:-18003}"   # Run the API on the
 
 ```bash
 cp .env.example .env                  # Configure environment
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt       # Python deps (FastAPI + pytest)
+uv sync --all-packages                # Python deps → one workspace venv (uv reads .python-version → 3.12)
 pnpm install                          # TypeScript workspace deps
-ln -sf apps/api app                   # Compat symlink: the `app` package resolves to apps/api
 docker compose up -d postgres         # Local Postgres (pgvector); migrations auto-apply on first init
-ollama pull bge-m3                    # Download embedding model (~4.7GB, host Ollama, first time only)
-uvicorn app.main:app --reload --port "${API_PORT:-18003}"   # Run the API
+ollama pull bge-m3                    # Download embedding model (host Ollama, first time only)
+uv run python -m uvicorn apps.api.main:app --reload --port "${API_PORT:-18003}"   # Run the API
 ```
 
 DB migrations under `./supabase/migrations` are applied automatically by Postgres on first
 volume init (mounted into `/docker-entrypoint-initdb.d`); recreate the volume to re-run them.
-The `app` symlink is required because `apps/api/main.py` imports the `app` package (CI does
-the same via `ln -sf apps/api app`).
+The Python packages are `apps.api` (FastAPI) and `libs.collectors`, imported in place from the
+repo root as uv workspace members (`package = false`). No `app` symlink or `PYTHONPATH` is
+needed — `pytest` sets `pythonpath = ["."]` and the API is run with `python -m` from the root.
 
 ### Common Commands
 
 | Command | Description |
 |---------|-------------|
-| `uvicorn app.main:app --reload --port ${API_PORT:-18003}` | Run the FastAPI API (host) |
-| `pytest tests/ -v` | Run all tests (host) |
+| `uv run python -m uvicorn apps.api.main:app --reload --port ${API_PORT:-18003}` | Run the FastAPI API (host) |
+| `uv run pytest tests/ -v` | Run all tests (host) |
 | `docker compose up -d postgres` | Start the local Postgres (pgvector) dependency |
 | `docker compose down` | Stop the Postgres container |
 | `docker compose logs -f postgres` | View Postgres logs |
@@ -218,17 +218,16 @@ Tuning via env vars: `SEARCH_RECENCY_TAU_SECONDS` (14d default), `SEARCH_RECENCY
 ### Testing
 
 ```bash
-# On the host (after `pip install -r requirements.txt` + `ln -sf apps/api app`)
-pytest tests/ -v                          # All tests
-pytest -m unit -v                         # Unit tests only
-pytest -m integration -v                  # Integration tests
-pytest tests/unit/test_collectors/test_base_collector.py -v  # Specific file
-pytest tests/ -k "test_embedding" -v      # Pattern match
+# On the host (after `uv sync --all-packages`; no symlink needed)
+uv run pytest tests/ -v                          # All tests
+uv run pytest -m unit -v                         # Unit tests only
+uv run pytest -m integration -v                  # Integration tests
+uv run pytest tests/ -k "test_embedding" -v      # Pattern match
 
-# Code quality
-black apps/api/ libs/collectors/          # Format
-ruff check apps/api/ libs/collectors/     # Lint
-mypy apps/api/ libs/collectors/           # Type check
+# Code quality (config in root pyproject.toml: [tool.black]/[tool.ruff]/[tool.mypy])
+uv run black apps/api/ libs/collectors/          # Format
+uv run ruff check apps/api/ libs/collectors/     # Lint
+uv run mypy apps/api/ libs/collectors/           # Type check
 
 # TypeScript
 pnpm --filter @mindbase/mcp-server typecheck

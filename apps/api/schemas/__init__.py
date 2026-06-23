@@ -1,6 +1,6 @@
 """Pydantic schemas"""
 
-from app.schemas.conversation import (
+from apps.api.schemas.conversation import (
     ConversationCreate,
     ConversationResponse,
     SearchQuery,

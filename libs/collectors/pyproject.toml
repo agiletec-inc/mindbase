@@ -1,0 +1,11 @@
+[project]
+name = "mindbase-collectors"
+version = "0.1.0"
+description = "AI conversation collectors (Claude, ChatGPT, Cursor, Windsurf, Gemini)"
+requires-python = ">=3.11"
+# Standard library only (dataclasses, datetime, pathlib, sqlite3).
+dependencies = []
+
+# Imported in place as the `libs.collectors` package via repo root; not distributed.
+[tool.uv]
+package = false

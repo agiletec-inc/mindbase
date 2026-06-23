@@ -50,9 +50,13 @@ pip-delete-this-directory.txt
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 .tox/
 .nox/
+
+# uv / virtualenv
+.venv/
 .hypothesis/
 *.mo
 *.pot

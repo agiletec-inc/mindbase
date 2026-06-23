@@ -1,11 +1,11 @@
 """CRUD operations"""
 
-from app.crud.conversation import (
+from apps.api.crud.conversation import (
     create_conversation_record,
     create_raw_conversation,
 )
-from app.crud.search import search_conversations
-from app.crud.embeddings import (
+from apps.api.crud.search import search_conversations
+from apps.api.crud.embeddings import (
     column_for_dim,
     count_conversations_missing_embedding,
     list_conversations_missing_embedding,

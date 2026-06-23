@@ -65,14 +65,14 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-qwen3-embedding:8b}
       - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-3072}
       - DEBUG=${DEBUG:-true}
-      - PYTHONPATH=/app/app:/workspace/mindbase
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - ./apps/api:/app/app:rw
-      - .:/workspace/mindbase:ro
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      # Mount source only (not the repo root) so the image's /opt/venv stays intact.
+      - ./apps:/app/apps:rw
+      - ./libs:/app/libs:rw
+    command: python -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

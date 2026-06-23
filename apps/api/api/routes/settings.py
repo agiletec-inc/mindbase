@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.conversation import AppSettings
-from app.services import settings_store
+from apps.api.schemas.conversation import AppSettings
+from apps.api.services import settings_store
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

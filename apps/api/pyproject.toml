@@ -1,0 +1,23 @@
+[project]
+name = "mindbase-api"
+version = "1.1.0"
+description = "MindBase FastAPI backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
+    "python-multipart==0.0.16",
+    "sqlalchemy[asyncio]==2.0.36",
+    "asyncpg==0.30.0",
+    "pgvector==0.3.6",
+    "httpx==0.27.2",
+    "pydantic==2.10.2",
+    "pydantic-settings==2.6.1",
+    "python-dotenv==1.0.1",
+    "psutil==6.1.0",
+]
+
+# Run in place (apps/api is on sys.path as the `apps.api` package via repo root);
+# not built or distributed as a wheel.
+[tool.uv]
+package = false

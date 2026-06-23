@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter, HTTPException
 
-from app.ollama_client import ollama_client
-from app.config import get_settings
-from app.api.schemas.embeddings import (
+from apps.api.ollama_client import ollama_client
+from apps.api.config import get_settings
+from apps.api.api.schemas.embeddings import (
     EmbeddingGenerateRequest,
     EmbeddingGenerateResponse,
     ModelInfo,
@@ -15,8 +15,8 @@ from app.api.schemas.embeddings import (
     ModelSwitchResponse,
     SystemSpecsResponse,
 )
-from app.services.hardware import detect_hardware, recommend_models
-from app.services.model_catalog import MODEL_CATALOG
+from apps.api.services.hardware import detect_hardware, recommend_models
+from apps.api.services.model_catalog import MODEL_CATALOG
 
 router = APIRouter(prefix="/api/embeddings", tags=["embeddings"])
 settings = get_settings()

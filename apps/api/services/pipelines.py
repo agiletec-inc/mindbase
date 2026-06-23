@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from app.schemas.conversation import ConversationResponse
+from apps.api.schemas.conversation import ConversationResponse
 
 logger = logging.getLogger(__name__)
 

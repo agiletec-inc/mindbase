@@ -9,9 +9,9 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.config import get_settings
-from app.models.conversation import RawConversation
-from app.services.deriver import process_raw_conversation
+from apps.api.config import get_settings
+from apps.api.models.conversation import RawConversation
+from apps.api.services.deriver import process_raw_conversation
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s"
