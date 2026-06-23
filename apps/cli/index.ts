@@ -41,23 +41,42 @@ async function main() {
       await run();
       break;
     }
+    case 'hook': {
+      const { run } = await import('./commands/hook.js');
+      await run();
+      break;
+    }
+    case 'install': {
+      const { run } = await import('./commands/install.js');
+      await run();
+      break;
+    }
+    case 'uninstall': {
+      const { run } = await import('./commands/uninstall.js');
+      await run();
+      break;
+    }
     default:
       console.log(`MindBase CLI v1.0.0
 
 Usage: mindbase <command> [options]
 
 Commands:
-  generate  Generate article from conversation data
-  publish   Publish article to platform
-  search    Search conversations
-  collect   Collect conversations from sources
-  status    Check service status
+  generate   Generate article from conversation data
+  publish    Publish article to platform
+  search     Search conversations
+  collect    Collect conversations from sources
+  status     Check service status
+  hook       Claude Code lifecycle hook handler (session-end | session-start)
+  install    Install Claude Code memory hooks into ~/.claude/settings.json
+  uninstall  Remove the Claude Code memory hooks
 
 Examples:
   mindbase generate --topic "Docker-First開発" --platform note
   mindbase publish --file generated/note/article.md --platform note --draft
   mindbase search --query "Docker" --limit 5
   mindbase collect --source claude-code
+  mindbase install --api-url http://localhost:18002
   mindbase status`);
       process.exit(command ? 1 : 0);
   }
