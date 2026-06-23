@@ -2,8 +2,8 @@
 
 import pytest
 
-from app.crud.embeddings import column_for_dim
-from app.ollama_client import EmbeddingClient
+from apps.api.crud.embeddings import column_for_dim
+from apps.api.ollama_client import EmbeddingClient
 
 
 @pytest.mark.unit

@@ -4,8 +4,8 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.conversation import CommandResult
-from app.services import settings_store
+from apps.api.schemas.conversation import CommandResult
+from apps.api.services import settings_store
 
 router = APIRouter(prefix="/control", tags=["control"])
 

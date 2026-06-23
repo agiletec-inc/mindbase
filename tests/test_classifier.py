@@ -1,6 +1,6 @@
 """Unit tests for the topic/project classifier helpers."""
 
-from app.services.classifier import infer_project, infer_topics
+from apps.api.services.classifier import infer_project, infer_topics
 
 
 def test_infer_topics_with_keywords() -> None:

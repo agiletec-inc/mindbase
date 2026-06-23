@@ -7,7 +7,7 @@ from typing import List, Optional
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.conversation import Conversation
+from apps.api.models.conversation import Conversation
 
 DEFAULT_RECENCY_WEIGHT = 0.15
 

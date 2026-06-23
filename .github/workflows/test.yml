@@ -30,11 +30,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          enable-cache: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,16 +43,8 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov
-
-      - name: Create compatibility symlinks
-        run: |
-          # Symlink for monorepo migration compatibility
-          ln -sf apps/api app
+      - name: Install Python dependencies (uv workspace)
+        run: uv sync --all-packages
 
       - name: Install TypeScript dependencies
         run: pnpm install --no-frozen-lockfile
@@ -64,8 +55,7 @@ jobs:
           OLLAMA_URL: http://localhost:11434
           EMBEDDING_MODEL: qwen3-embedding:8b
           EMBEDDING_DIMENSIONS: 4096
-        run: |
-          pytest tests/ -v --cov=apps/api --cov=libs/collectors --cov-report=xml
+        run: uv run pytest tests/ -v
 
       - name: Run TypeScript type check
         run: pnpm --filter @mindbase/mcp-server typecheck
@@ -85,25 +75,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
+          enable-cache: true
 
-      - name: Install linters
-        run: |
-          pip install black ruff mypy types-requests
-
-      - name: Create compatibility symlinks
-        run: |
-          ln -sf apps/api app
+      - name: Install dependencies (uv workspace)
+        run: uv sync --all-packages
 
       - name: Run Black
-        run: black --check apps/api/ libs/collectors/
+        run: uv run black --check apps/api/ libs/collectors/
 
       - name: Run Ruff
-        run: ruff check apps/api/ libs/collectors/ --select E9,F63,F7,F82
+        run: uv run ruff check apps/api/ libs/collectors/
 
       - name: Run mypy
         continue-on-error: true  # TODO: Fix mypy configuration
-        run: mypy apps/api/ libs/collectors/ --ignore-missing-imports
+        run: uv run mypy apps/api/ libs/collectors/

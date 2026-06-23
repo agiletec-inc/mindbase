@@ -1,5 +1,5 @@
 """SQLAlchemy models"""
 
-from app.models.conversation import Conversation
+from apps.api.models.conversation import Conversation
 
 __all__ = ["Conversation"]

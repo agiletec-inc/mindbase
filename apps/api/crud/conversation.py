@@ -7,8 +7,8 @@ from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.conversation import Conversation, RawConversation
-from app.schemas.conversation import ConversationCreate
+from apps.api.models.conversation import Conversation, RawConversation
+from apps.api.schemas.conversation import ConversationCreate
 
 
 async def create_raw_conversation(

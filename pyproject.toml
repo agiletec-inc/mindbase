@@ -1,0 +1,85 @@
+[project]
+name = "mindbase"
+version = "0.0.0"
+description = "MindBase — local-first AI conversation knowledge management (workspace root)"
+requires-python = ">=3.11"
+dependencies = []
+
+# Workspace root is a non-distributed anchor; members carry the real dependencies.
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api", "libs/collectors"]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.24.0",
+    "pytest-cov==6.0.0",
+    "pytest-httpx==0.34.0",
+    "black==24.10.0",
+    "ruff==0.8.2",
+    "mypy==1.13.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "3.11"
+testpaths = ["tests"]
+# Put the repo root on sys.path so `apps.api.*` and `libs.collectors.*` resolve
+# without the old `ln -sf apps/api app` symlink.
+pythonpath = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra --strict-markers --strict-config --showlocals --tb=short --cov=apps/api --cov=libs/collectors --cov-report=term-missing:skip-covered --cov-report=html --cov-report=xml --cov-branch"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (require external services)",
+    "e2e: End-to-end tests (full pipeline)",
+    "slow: Slow tests (>1s execution time)",
+    "asyncio: Async tests requiring event loop",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+    # starlette 0.38 imports the legacy `multipart` name; python-multipart emits a
+    # PendingDeprecationWarning asking for `python_multipart`. Benign upstream notice.
+    "ignore:Please use .import python_multipart. instead.:PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["apps/api", "libs/collectors"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.black]
+line-length = 88
+target-version = ["py311", "py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

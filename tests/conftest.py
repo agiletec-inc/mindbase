@@ -19,9 +19,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 from libs.collectors.base_collector import Message
-from app.config import Settings
-from app.database import Base
-from app.models.conversation import Conversation, RawConversation  # noqa: F401
+from apps.api.config import Settings
+from apps.api.database import Base
+from apps.api.models.conversation import Conversation, RawConversation  # noqa: F401
 
 
 @pytest_asyncio.fixture
@@ -30,8 +30,8 @@ async def async_client(
 ) -> AsyncGenerator["AsyncClient", None]:
     """Async HTTP client bound to the FastAPI app."""
     from httpx import AsyncClient
-    from app.main import app
-    from app.database import get_db
+    from apps.api.main import app
+    from apps.api.database import get_db
 
     async_session = async_sessionmaker(
         test_engine,
@@ -207,7 +207,7 @@ def mock_ollama_response() -> dict:
 def stub_ollama_requests(monkeypatch, test_settings: Settings):
     """Stub Ollama HTTP calls to avoid hitting external services."""
     from httpx import Response, Request
-    from app.ollama_client import EmbeddingClient, ollama_client
+    from apps.api.ollama_client import EmbeddingClient, ollama_client
 
     async def fake_request(self, method: str, path: str, **kwargs):
         request = Request(method, f"{self.base_url}{path}")

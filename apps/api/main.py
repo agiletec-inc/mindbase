@@ -3,8 +3,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
-from app.api.routes import (
+from apps.api.config import get_settings
+from apps.api.api.routes import (
     control,
     conversations,
     embeddings,
