@@ -27,8 +27,13 @@ class Settings(BaseSettings):
 
     # Ollama Embedding
     OLLAMA_URL: str
-    EMBEDDING_MODEL: str
-    EMBEDDING_DIMENSIONS: int
+    # Seed default for the active embedding model. The live source of truth is the
+    # settings store (services/settings_store.get_active_embedding); this env value
+    # only seeds it when the store has no choice yet.
+    EMBEDDING_MODEL: str = "bge-m3"
+    # Vestigial: the real dimension is derived from the embedding vector length
+    # (crud.column_for_dim). Kept only for the legacy conversations.embedding column.
+    EMBEDDING_DIMENSIONS: int = 1024
 
     # Max characters of input text per embedding call. Embedding models have a
     # fixed context window (bge-m3: 8192 tokens) and error on overflow, so long

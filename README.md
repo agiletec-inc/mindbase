@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 
-> **100 % local, zero vendor lock-in.** PostgreSQL 17 + pgvector + FastAPI + Ollama (qwen3-embedding:8b). No API keys, no hosted dependencies, completely free to run on your own machine.
+> **100 % local, zero vendor lock-in.** PostgreSQL 17 + pgvector + FastAPI + Ollama (default `bge-m3`, switchable to any catalog model — `qwen3-embedding:8b`, `mxbai-embed-large`, … — from Settings). No API keys, no hosted dependencies, completely free to run on your own machine.
 
 ## 🌟 Part of the AIRIS Ecosystem
 
@@ -66,7 +66,7 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 
 1. **Unified timeline** – Collectors pull logs from editors, desktop clients, terminal agents, and any bespoke transcripts. Everything lands in one ordered ledger so you can replay how a project evolved across assistants.
 2. **Project & topic intelligence** – Stored metadata keeps conversations grouped by project, topic, and source. You can trace a task from brainstorming in Claude Desktop to implementation inside Cursor without manual tagging.
-3. **Semantic memory** – Messages are embedded locally through Ollama’s qwen3-embedding:8b model and stored in pgvector. MindBase becomes the long-term recall layer for AIRIS tools, MCP servers, or any downstream automation.
+3. **Semantic memory** – Messages are embedded locally through Ollama (default `bge-m3`, switchable per the model catalog) and stored in pgvector. Vectors from different models coexist per conversation, so you can re-embed and compare models. MindBase becomes the long-term recall layer for AIRIS tools, MCP servers, or any downstream automation.
 4. **Local-first privacy** – Conversations reside only inside your Dockerized PostgreSQL volume. Nothing writes to `~/Library/Application Support` or remote services, so your chat history never leaks into cloud sync folders.
 
 ## Architecture overview
@@ -106,7 +106,7 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
                 │ local embedding calls
                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Ollama (qwen3-embedding:8b)                                              │
+│ Ollama (default bge-m3 · switchable model)                               │
 │  - Fully on-device                                                       │
 │  - Runs free of charge                                                   │
 └───────────────┬──────────────────────────────────────────────────────────┘

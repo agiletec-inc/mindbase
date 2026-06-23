@@ -53,8 +53,6 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://mindbase:mindbase_dev@localhost:5432/mindbase_test
           OLLAMA_URL: http://localhost:11434
-          EMBEDDING_MODEL: qwen3-embedding:8b
-          EMBEDDING_DIMENSIONS: 4096
         run: uv run pytest tests/ -v
 
       - name: Run TypeScript type check

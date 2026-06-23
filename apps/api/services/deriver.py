@@ -11,6 +11,7 @@ from apps.api import crud
 from apps.api.models.conversation import RawConversation
 from apps.api.ollama_client import ollama_client
 from apps.api.schemas.conversation import ConversationCreate, ConversationResponse
+from apps.api.services import settings_store
 from apps.api.services.classifier import infer_project, infer_topics
 from apps.api.services.pipelines import run_post_derivation
 
@@ -55,9 +56,10 @@ async def process_raw_conversation(
     # conversation_embeddings (keyed by provider/model), not the legacy
     # conversations.embedding column, so providers with different dimensions
     # can coexist.
-    provider = ollama_client.active_provider
-    model = ollama_client.active_model
-    embedding = await ollama_client.embed(text_content or " ")
+    provider, model = settings_store.get_active_embedding()
+    embedding = await ollama_client.embed(
+        text_content or " ", provider=provider, model=model
+    )
 
     project = infer_project(
         metadata=payload.metadata,
