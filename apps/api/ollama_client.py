@@ -11,8 +11,9 @@ Model management (pull, delete, list) is delegated to services/model_manager.py.
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Iterable, List, Tuple
+from typing import AsyncIterator, Iterable, List, Tuple
 
 import httpx
 
@@ -175,6 +176,36 @@ class EmbeddingClient:
         if prov == OLLAMA:
             return [await self._ollama_embed(text, mdl) for text in text_list]
         raise ValueError(f"Unknown embedding provider: {prov!r}")
+
+    async def chat(
+        self,
+        messages: List[dict],
+        model: str,
+        options: dict | None = None,
+    ) -> AsyncIterator[str]:
+        """Stream an Ollama chat completion, yielding content deltas.
+
+        Chat orchestration (RAG, prompt assembly, persistence) lives in the API
+        route; this is just the transport so the LLM call stays on the server and
+        clients never talk to Ollama directly.
+        """
+        url = f"{self.ollama_url}/api/chat"
+        payload: dict = {"model": model, "messages": messages, "stream": True}
+        if options:
+            payload["options"] = options
+
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            async with client.stream("POST", url, json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    data = json.loads(line)
+                    delta = (data.get("message") or {}).get("content")
+                    if delta:
+                        yield delta
+                    if data.get("done"):
+                        break
 
     async def health_check(self) -> bool:
         """Return True if the active provider responds successfully."""

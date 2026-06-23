@@ -245,6 +245,12 @@ def stub_ollama_requests(monkeypatch, test_settings: Settings):
 
     monkeypatch.setattr(ollama_client, "list_models", fake_list_models, raising=False)
 
+    async def fake_chat(messages, model, options=None):
+        for token in ["Hello", ", ", "world", "!"]:
+            yield token
+
+    monkeypatch.setattr(ollama_client, "chat", fake_chat, raising=False)
+
 
 @pytest.fixture(autouse=True)
 def isolate_settings_store(tmp_path, monkeypatch):
