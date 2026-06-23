@@ -73,7 +73,7 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Menubar App (Electron) ✨ NEW: Auto-Collection                           │
+│ Menubar App (Swift/SwiftUI) ✨ Auto-Collection                           │
 │  - File system watcher (FSEvents) for conversation directories           │
 │  - Auto-triggers collectors on new conversation detection                │
 │  - Toggle: ✓ Auto-Collection Enabled                                    │
@@ -157,7 +157,7 @@ All conversation data lives in the PostgreSQL volume declared in `compose.yml` (
 
 ### Menu bar companion ✨ Auto-Collection
 
-A lightweight Electron menu bar app that **automatically collects AI conversations** from Claude Code, Cursor, Windsurf, and ChatGPT. It monitors conversation directories and triggers collectors on file changes.
+A lightweight native **Swift / SwiftUI** menu bar app that **automatically collects AI conversations** from Claude Code, Cursor, Windsurf, and ChatGPT. It monitors conversation directories and triggers collectors on file changes.
 
 **Features:**
 - **Auto-Collection Toggle**: Enable/disable via menu bar (✓ Auto-Collection Enabled)
@@ -168,9 +168,11 @@ A lightweight Electron menu bar app that **automatically collects AI conversatio
 
 **Setup:**
 ```bash
-cd apps/menubar
-pnpm install   # first run only
-pnpm dev       # or from root: pnpm dev:menubar
+# Homebrew (recommended)
+brew tap agiletec-inc/tap
+brew install mindbase-menubar
+
+# Or build from source — see apps/menubar-swift/README.md
 ```
 
 Look for the MindBase icon in your macOS menu bar. Click **"Auto-Collection Disabled"** to toggle ON. The watcher will start monitoring conversation directories and automatically run collectors when new files are detected.
