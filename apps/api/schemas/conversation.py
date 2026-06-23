@@ -157,6 +157,26 @@ class CommandResult(BaseModel):
     stderr: str
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    """A chat turn. The backend resolves the model/params from the settings SSoT,
+    fetches RAG context, assembles the prompt, streams the LLM, and persists — so
+    the client just sends a message and renders the stream."""
+
+    message: str = Field(..., min_length=1, description="User message")
+    model: Optional[str] = Field(None, description="Override the active chat model")
+    history: List[ChatMessage] = Field(
+        default_factory=list, description="Prior turns in this session"
+    )
+    rag_limit: int = Field(3, ge=0, le=20, description="Past conversations to retrieve")
+    rag_threshold: float = Field(0.5, ge=0.0, le=1.0)
+    store: bool = Field(True, description="Persist this turn as a conversation")
+
+
 class SearchQuery(BaseModel):
     """Schema for semantic search query"""
 

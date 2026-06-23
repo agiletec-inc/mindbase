@@ -1,5 +1,53 @@
 """Backend-as-brain: chat settings SSoT, conversation store-of-record, chat models."""
 
+import json
+
+
+def _sse_deltas(body: str) -> list[str]:
+    out = []
+    for line in body.splitlines():
+        if line.startswith("data: "):
+            evt = json.loads(line[6:])
+            if "delta" in evt:
+                out.append(evt["delta"])
+    return out
+
+
+async def test_chat_streams_reply_and_persists_turn(async_client):
+    # rag_limit=0 keeps it self-contained (no stored vectors needed).
+    r = await async_client.post(
+        "/api/chat", json={"message": "hi there", "rag_limit": 0}
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/event-stream")
+
+    # The streamed deltas reconstruct the (stubbed) reply, and the stream is `done`.
+    assert "".join(_sse_deltas(r.text)) == "Hello, world!"
+    assert any(
+        json.loads(line[6:]).get("done")
+        for line in r.text.splitlines()
+        if line.startswith("data: ")
+    )
+
+    # The completed turn is persisted (store-of-record), source mindbase-chat.
+    listed = await async_client.get(
+        "/conversations", params={"source": "mindbase-chat"}
+    )
+    assert listed.status_code == 200
+    assert any(row["source"] == "mindbase-chat" for row in listed.json())
+
+
+async def test_chat_can_skip_persistence(async_client):
+    r = await async_client.post(
+        "/api/chat", json={"message": "no save", "rag_limit": 0, "store": False}
+    )
+    assert r.status_code == 200
+    assert "".join(_sse_deltas(r.text)) == "Hello, world!"
+    listed = await async_client.get(
+        "/conversations", params={"source": "mindbase-chat"}
+    )
+    assert listed.json() == []
+
 
 async def test_chat_settings_are_single_source_of_truth(async_client):
     # Default seed comes through GET /settings.
