@@ -3,7 +3,6 @@
 from fastapi import APIRouter, HTTPException
 
 from apps.api.ollama_client import ollama_client
-from apps.api.config import get_settings
 from apps.api.api.schemas.embeddings import (
     EmbeddingGenerateRequest,
     EmbeddingGenerateResponse,
@@ -15,11 +14,11 @@ from apps.api.api.schemas.embeddings import (
     ModelSwitchResponse,
     SystemSpecsResponse,
 )
+from apps.api.services import settings_store
 from apps.api.services.hardware import detect_hardware, recommend_models
 from apps.api.services.model_catalog import MODEL_CATALOG
 
 router = APIRouter(prefix="/api/embeddings", tags=["embeddings"])
-settings = get_settings()
 
 
 @router.get("/models", response_model=ModelListResponse)
@@ -54,7 +53,7 @@ async def list_models():
         ]
 
         return ModelListResponse(
-            current=settings.EMBEDDING_MODEL,
+            current=settings_store.get_active_embedding()[1],
             available=available,
             hardware={
                 "platform": hardware["platform"],
@@ -114,8 +113,16 @@ async def switch_active_model(request: ModelSwitchRequest):
                 detail=f"Model not installed: {request.model}. Run POST /api/embeddings/models/install first.",
             )
 
-        previous_model = ollama_client.model
-        ollama_client.model = request.model
+        previous_model = settings_store.get_active_embedding()[1]
+        # Cloud-catalog models (text-embedding-3-large) are OpenAI; the rest Ollama.
+        provider = (
+            "openai"
+            if MODEL_CATALOG[request.model].get("size") == "cloud"
+            else "ollama"
+        )
+        # Persist to the settings store (the single source of truth) so the switch
+        # survives a restart and takes effect without one.
+        settings_store.set_active_embedding(provider, request.model)
 
         return ModelSwitchResponse(
             status="success",
@@ -134,7 +141,7 @@ async def switch_active_model(request: ModelSwitchRequest):
 async def delete_model(model_name: str):
     """Remove an installed embedding model."""
     try:
-        if model_name == ollama_client.model:
+        if model_name == settings_store.get_active_embedding()[1]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot delete active model: {model_name}. Switch to another model first.",
@@ -197,11 +204,14 @@ async def get_system_specs():
 async def generate_embedding(request: EmbeddingGenerateRequest):
     """Generate an embedding vector for arbitrary text."""
     try:
-        embedding = await ollama_client.embed(request.text)
+        provider, model = settings_store.get_active_embedding()
+        embedding = await ollama_client.embed(
+            request.text, provider=provider, model=model
+        )
         return EmbeddingGenerateResponse(
             embedding=embedding,
             dimensions=len(embedding),
-            model=ollama_client.model,
+            model=model,
         )
     except Exception as e:  # pragma: no cover - surfaced via API response
         raise HTTPException(

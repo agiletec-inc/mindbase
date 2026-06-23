@@ -111,6 +111,14 @@ class AppSettings(BaseModel):
     refreshIntervalMs: int = Field(
         15000, description="Menubar poll interval in milliseconds"
     )
+    # Active embedding selection — the single source of truth (persisted here).
+    # Null means "unset": the API seeds these from env defaults on read.
+    embeddingProvider: Optional[str] = Field(
+        None, description="Active embedding provider: 'ollama' | 'openai'"
+    )
+    embeddingModel: Optional[str] = Field(
+        None, description="Active embedding model name (from the model catalog)"
+    )
     collectors: List[CollectorConfig] = Field(default_factory=list)
     pipelines: List[PipelineConfig] = Field(default_factory=list)
 
@@ -175,6 +183,53 @@ class SearchResult(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CompareModel(BaseModel):
+    """One (provider, model) pair to evaluate in a comparison."""
+
+    provider: str = Field("ollama", description="Embedding provider: 'ollama'|'openai'")
+    model: Optional[str] = Field(
+        None, description="Model name; defaults to the provider's configured model"
+    )
+
+
+class CompareRequest(BaseModel):
+    """Run one query against several embedding models, side by side.
+
+    Each model searches only its own stored vectors (per-model coexistence in
+    conversation_embeddings). Backfill coverage first with POST /conversations/reembed
+    so every model has vectors to compare fairly.
+    """
+
+    query: str = Field(..., description="Search query text", min_length=1)
+    models: List[CompareModel] = Field(
+        ..., min_length=1, description="Models to compare for the same query"
+    )
+    limit: int = Field(10, ge=1, le=100)
+    threshold: float = Field(0.0, ge=0.0, le=1.0, description="Similarity threshold")
+    source: Optional[str] = None
+    project: Optional[str] = None
+    topic: Optional[str] = None
+    workspace_path: Optional[str] = None
+
+
+class CompareModelResults(BaseModel):
+    """Ranked results for a single model within a comparison."""
+
+    provider: str
+    model: str
+    results: List[SearchResult] = Field(default_factory=list)
+    error: Optional[str] = Field(
+        None, description="Set if this model could not be embedded/searched"
+    )
+
+
+class CompareResponse(BaseModel):
+    """Side-by-side comparison of several models over one query."""
+
+    query: str
+    models: List[CompareModelResults]
 
 
 class ReembedRequest(BaseModel):

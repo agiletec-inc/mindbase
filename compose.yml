@@ -62,8 +62,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-large}
       - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-qwen3-embedding:8b}
-      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-3072}
+      # Active embedding model is the settings store (SSoT), seeded by the API's
+      # bge-m3 default. Set EMBEDDING_MODEL only to override that initial seed.
       - DEBUG=${DEBUG:-true}
     depends_on:
       postgres:
@@ -108,7 +108,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-mindbase}:${POSTGRES_PASSWORD:-mindbase_dev}@postgres:${POSTGRES_INTERNAL_PORT:-5432}/${POSTGRES_DB:-mindbase_dev}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-qwen3-embedding:8b}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-bge-m3}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-large}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o}
