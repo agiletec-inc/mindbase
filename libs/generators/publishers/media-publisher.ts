@@ -47,6 +47,14 @@ function yamlString(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+/**
+ * Drop a leading "タイトル:" / "Title:" label that the LLM sometimes echoes into
+ * the title line (e.g. `# タイトル: 実際のタイトル`).
+ */
+export function stripTitleLabel(value: string): string {
+  return value.replace(/^\s*(?:タイトル|title)\s*[:：]\s*/i, '').trim();
+}
+
 function yamlStringArray(values: string[]): string {
   return `[${values.map(yamlString).join(', ')}]`;
 }
@@ -90,9 +98,13 @@ export function deriveSummary(body: string, maxLen = 140): string {
 
 /** Build the full `.mdx` document (frontmatter + body) for the media site. */
 export function formatMediaArticle(input: MediaArticleInput): string {
+  const title = stripTitleLabel(input.title);
+  // Strip the same label from the body's first heading so the rendered H1 is clean.
+  const body = input.body.trim().replace(/^(#{1,6}\s+)(.+)$/m, (_m, hashes, text) => hashes + stripTitleLabel(text));
+
   const frontmatter = [
     '---',
-    `title: ${yamlString(input.title)}`,
+    `title: ${yamlString(title)}`,
     `date: ${yamlString(input.date)}`,
     `category: ${yamlString(input.category)}`,
     `tags: ${yamlStringArray(input.tags)}`,
@@ -104,7 +116,7 @@ export function formatMediaArticle(input: MediaArticleInput): string {
     '---',
   ].join('\n');
 
-  return `${frontmatter}\n\n${input.body.trim()}\n`;
+  return `${frontmatter}\n\n${body}\n`;
 }
 
 /**
