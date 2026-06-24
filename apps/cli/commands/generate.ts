@@ -13,7 +13,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { createStorage } from '../db.js';
 import { ArticleGenerator, type ConversationSource } from '../../../libs/generators/article-generator.js';
-import { OpenAIClient } from '../../../libs/generators/llm-client.js';
+import { createLLMClient } from '../../../libs/generators/llm-client.js';
 import type { Platform } from '../../../libs/generators/platform-prompts.js';
 import {
   deriveSummary,
@@ -93,7 +93,7 @@ export async function run() {
 
   console.log(`Generating ${platform} article via LLM...`);
 
-  const llm = new OpenAIClient();
+  const llm = createLLMClient();
   const generator = new ArticleGenerator(llm);
   const article = await generator.generate({
     topic: values.topic,
