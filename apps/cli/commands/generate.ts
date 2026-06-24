@@ -4,7 +4,8 @@
  * Usage:
  *   mindbase generate --topic "Docker-First" --platform note [--style ...] [--limit 10]
  *   mindbase generate --topic "Claude Code" --platform media --slug claude-code \
- *     --lang ja --category ceo-blog   (writes an .mdx into $MEDIA_CONTENT_PATH)
+ *     --category ai --tags a,b   (writes an .mdx into $MEDIA_CONTENT_PATH =
+ *     agiletec/apps/corporate/src/content/media)
  */
 
 import { parseArgs } from 'node:util';
@@ -20,7 +21,6 @@ import {
   writeMediaArticle,
   MEDIA_CATEGORIES,
   type MediaCategory,
-  type MediaLanguage,
 } from '../../../libs/generators/publishers/media-publisher.js';
 
 export async function run() {
@@ -32,15 +32,11 @@ export async function run() {
       style: { type: 'string', short: 's' },
       limit: { type: 'string', short: 'l' },
       'dry-run': { type: 'boolean' },
-      // media-only
-      lang: { type: 'string' },
+      // media-only (corporate owned schema)
       category: { type: 'string' },
       slug: { type: 'string' },
       tags: { type: 'string' },
-      'translation-key': { type: 'string' },
-      author: { type: 'string' },
       summary: { type: 'string' },
-      description: { type: 'string' },
     },
     strict: true,
   });
@@ -110,21 +106,15 @@ export async function run() {
     return;
   }
 
-  // media target → write a media-schema .mdx into the agiletec/apps/media repo.
+  // media target → write a corporate-media .mdx into agiletec/apps/corporate
+  // (served at agiletec.net/media). Schema: apps/corporate/src/lib/media.ts.
   if (platform === 'media') {
     const contentRoot = process.env.MEDIA_CONTENT_PATH;
     if (!contentRoot) {
       console.error(
-        'MEDIA_CONTENT_PATH is required for --platform media. ' +
-          'Set it to agiletec/apps/media/content (e.g. export MEDIA_CONTENT_PATH=~/github/agiletec-inc/agiletec/apps/media/content).'
+        'MEDIA_CONTENT_PATH is required for --platform media. Set it to the corporate ' +
+          'media content dir (e.g. export MEDIA_CONTENT_PATH=~/github/agiletec-inc/agiletec/apps/corporate/src/content/media).'
       );
-      await storage.close();
-      process.exit(1);
-    }
-
-    const lang = (values.lang || 'ja') as MediaLanguage;
-    if (lang !== 'ja' && lang !== 'en') {
-      console.error(`Unknown --lang: ${lang}. Supported: ja, en`);
       await storage.close();
       process.exit(1);
     }
@@ -153,31 +143,27 @@ export async function run() {
       .filter(Boolean);
 
     const date = new Date().toISOString().split('T')[0];
+    const slug = `${date}-${baseSlug}`;
     const filePath = await writeMediaArticle(
       {
         title: article.title,
         body: article.content,
         tags,
-        language: lang,
         category,
         slug: baseSlug,
-        translationKey: values['translation-key'] || baseSlug,
-        authors: [values.author || 'kazuki'],
         date,
         summary: values.summary || deriveSummary(article.content),
-        description: values.description,
       },
       contentRoot
     );
 
-    console.log(`\nMedia article written:`);
+    console.log(`\nMedia article written (corporate / agiletec.net/media):`);
     console.log(`  Title:    ${article.title}`);
-    console.log(`  Lang:     ${lang}`);
     console.log(`  Category: ${category}`);
     console.log(`  File:     ${filePath}`);
-    console.log(`  URL:      /${lang}/blog/${date}-${baseSlug}`);
+    console.log(`  URL:      /media/${slug}`);
     console.log(`  Sources:  ${article.metadata.sourceConversations} conversations`);
-    console.log(`\nNext: review it in the media app, then open a PR in agiletec.`);
+    console.log(`\nNext: review it at agiletec.net/media (local corporate dev), then open a PR in agiletec.`);
 
     await storage.close();
     return;
