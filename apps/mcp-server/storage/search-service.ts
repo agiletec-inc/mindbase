@@ -18,6 +18,26 @@ const DEFAULT_WEIGHTS = {
   recency: 0.15,
 };
 
+/**
+ * Map an embedding dimension to its per-provider vector column in
+ * conversation_embeddings (mirrors apps/api column_for_dim). Embeddings live in
+ * that table, NOT in the legacy conversations.embedding column.
+ */
+function columnForDim(dim: number): string {
+  switch (dim) {
+    case 768:
+      return 'vec_768';
+    case 1024:
+      return 'vec_1024';
+    case 3072:
+      return 'vec_3072';
+    case 4096:
+      return 'vec_4096';
+    default:
+      throw new Error(`Unsupported embedding dimension ${dim}. Supported: 768, 1024, 3072, 4096.`);
+  }
+}
+
 export class SearchService {
   constructor(
     private pool: Pool,
@@ -49,6 +69,9 @@ export class SearchService {
   ): Promise<SearchResult[]> {
     try {
       const queryEmbedding = await this.embeddingClient.generate(query);
+      const col = columnForDim(queryEmbedding.length);
+      const provider = this.embeddingClient.getActiveProvider();
+      const model = this.embeddingClient.getActiveModel();
 
       let semanticW = 1 - recencyWeight;
       let recencyW = recencyWeight;
@@ -68,23 +91,24 @@ export class SearchService {
       const sqlQuery = `
         SELECT
           c.*,
-          GREATEST(0, 1 - (c.embedding <=> $1::vector)) AS semantic_score,
+          GREATEST(0, 1 - (e.${col} <=> $1::vector)) AS semantic_score,
           LEAST(
             1.0,
             EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
             + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6::double precision ELSE 0 END
           ) AS recency_score,
           (
-            GREATEST(0, 1 - (c.embedding <=> $1::vector)) * $7
+            GREATEST(0, 1 - (e.${col} <=> $1::vector)) * $7
             + LEAST(
                 1.0,
                 EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
                 + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6::double precision ELSE 0 END
               ) * $8
           ) AS combined_score
-        FROM conversations c
-        WHERE c.embedding IS NOT NULL
-          AND GREATEST(0, 1 - (c.embedding <=> $1::vector)) > $2
+        FROM conversation_embeddings e
+        JOIN conversations c ON c.id = e.conversation_id
+        WHERE e.provider = $9 AND e.model = $10 AND e.${col} IS NOT NULL
+          AND GREATEST(0, 1 - (e.${col} <=> $1::vector)) > $2
         ORDER BY combined_score DESC
         LIMIT $3
       `;
@@ -98,6 +122,8 @@ export class SearchService {
         safeBoostValue,
         semanticW,
         recencyW,
+        provider,
+        model,
       ]);
 
       return result.rows.map((row) => ({
@@ -140,6 +166,9 @@ export class SearchService {
       }
 
       const queryEmbedding = await this.embeddingClient.generate(query);
+      const col = columnForDim(queryEmbedding.length);
+      const provider = this.embeddingClient.getActiveProvider();
+      const model = this.embeddingClient.getActiveModel();
 
       const sqlQuery = `
         WITH keyword_search AS (
@@ -158,10 +187,10 @@ export class SearchService {
         ),
         semantic_search AS (
           SELECT
-            id,
-            GREATEST(0, 1 - (embedding <=> $2::vector)) AS semantic_score
-          FROM conversations
-          WHERE embedding IS NOT NULL
+            e.conversation_id AS id,
+            GREATEST(0, 1 - (e.${col} <=> $2::vector)) AS semantic_score
+          FROM conversation_embeddings e
+          WHERE e.provider = $11 AND e.model = $12 AND e.${col} IS NOT NULL
         ),
         combined AS (
           SELECT
@@ -198,6 +227,8 @@ export class SearchService {
         safeBoostDays,
         safeBoostValue,
         limit,
+        provider,
+        model,
       ]);
 
       return result.rows.map((row) => ({
