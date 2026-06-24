@@ -1,7 +1,11 @@
 /**
  * generate command — Search conversations and generate an article via LLM.
  *
- * Usage: mindbase generate --topic "Docker-First" --platform note [--style beginner-friendly] [--limit 10]
+ * Usage:
+ *   mindbase generate --topic "Docker-First" --platform note [--style ...] [--limit 10]
+ *   mindbase generate --topic "Claude Code" --platform media --slug claude-code \
+ *     --category ai --tags a,b   (writes an .mdx into $MEDIA_CONTENT_PATH =
+ *     agiletec/apps/corporate/src/content/media)
  */
 
 import { parseArgs } from 'node:util';
@@ -10,8 +14,14 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { createStorage } from '../db.js';
 import { ArticleGenerator, type ConversationSource } from '../../../libs/generators/article-generator.js';
-import { OpenAIClient } from '../../../libs/generators/llm-client.js';
+import { createLLMClient } from '../../../libs/generators/llm-client.js';
 import type { Platform } from '../../../libs/generators/platform-prompts.js';
+import {
+  deriveSummary,
+  writeMediaArticle,
+  MEDIA_CATEGORIES,
+  type MediaCategory,
+} from '../../../libs/generators/publishers/media-publisher.js';
 
 export async function run() {
   const { values } = parseArgs({
@@ -22,18 +32,23 @@ export async function run() {
       style: { type: 'string', short: 's' },
       limit: { type: 'string', short: 'l' },
       'dry-run': { type: 'boolean' },
+      // media-only (corporate owned schema)
+      category: { type: 'string' },
+      slug: { type: 'string' },
+      tags: { type: 'string' },
+      summary: { type: 'string' },
     },
     strict: true,
   });
 
   if (!values.topic || !values.platform) {
-    console.error('Usage: mindbase generate --topic <topic> --platform <note|qiita|zenn> [--style <style>]');
+    console.error('Usage: mindbase generate --topic <topic> --platform <note|qiita|zenn|media> [--style <style>]');
     process.exit(1);
   }
 
   const platform = values.platform as Platform;
-  if (!['note', 'qiita', 'zenn'].includes(platform)) {
-    console.error(`Unknown platform: ${platform}. Supported: note, qiita, zenn`);
+  if (!['note', 'qiita', 'zenn', 'media'].includes(platform)) {
+    console.error(`Unknown platform: ${platform}. Supported: note, qiita, zenn, media`);
     process.exit(1);
   }
 
@@ -74,7 +89,7 @@ export async function run() {
 
   console.log(`Generating ${platform} article via LLM...`);
 
-  const llm = new OpenAIClient();
+  const llm = createLLMClient();
   const generator = new ArticleGenerator(llm);
   const article = await generator.generate({
     topic: values.topic,
@@ -87,6 +102,69 @@ export async function run() {
     console.log('\n--- Preview ---');
     console.log(article.content.substring(0, 1000));
     console.log('--- (truncated) ---');
+    await storage.close();
+    return;
+  }
+
+  // media target → write a corporate-media .mdx into agiletec/apps/corporate
+  // (served at agiletec.net/media). Schema: apps/corporate/src/lib/media.ts.
+  if (platform === 'media') {
+    const contentRoot = process.env.MEDIA_CONTENT_PATH;
+    if (!contentRoot) {
+      console.error(
+        'MEDIA_CONTENT_PATH is required for --platform media. Set it to the corporate ' +
+          'media content dir (e.g. export MEDIA_CONTENT_PATH=~/github/agiletec-inc/agiletec/apps/corporate/src/content/media).'
+      );
+      await storage.close();
+      process.exit(1);
+    }
+
+    const category = (values.category || 'ai') as MediaCategory;
+    if (!MEDIA_CATEGORIES.includes(category)) {
+      console.error(`Unknown --category: ${category}. Supported: ${MEDIA_CATEGORIES.join(', ')}`);
+      await storage.close();
+      process.exit(1);
+    }
+
+    const baseSlug = (values.slug || values.topic)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 60);
+    if (!baseSlug) {
+      console.error('Could not derive an ASCII slug from the topic. Pass --slug explicitly (e.g. --slug claude-code-senior-engineer).');
+      await storage.close();
+      process.exit(1);
+    }
+
+    const tags = (values.tags || '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const date = new Date().toISOString().split('T')[0];
+    const slug = `${date}-${baseSlug}`;
+    const filePath = await writeMediaArticle(
+      {
+        title: article.title,
+        body: article.content,
+        tags,
+        category,
+        slug: baseSlug,
+        date,
+        summary: values.summary || deriveSummary(article.content),
+      },
+      contentRoot
+    );
+
+    console.log(`\nMedia article written (corporate / agiletec.net/media):`);
+    console.log(`  Title:    ${article.title}`);
+    console.log(`  Category: ${category}`);
+    console.log(`  File:     ${filePath}`);
+    console.log(`  URL:      /media/${slug}`);
+    console.log(`  Sources:  ${article.metadata.sourceConversations} conversations`);
+    console.log(`\nNext: review it at agiletec.net/media (local corporate dev), then open a PR in agiletec.`);
+
     await storage.close();
     return;
   }

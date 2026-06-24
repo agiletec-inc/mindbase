@@ -25,6 +25,16 @@ export class EmbeddingClient {
     this.openaiModel = config.openaiModel || 'text-embedding-3-large';
   }
 
+  /** Provider that `generate()` uses — matches the (provider, model) stored in conversation_embeddings. */
+  getActiveProvider(): 'openai' | 'ollama' {
+    return this.openaiApiKey ? 'openai' : 'ollama';
+  }
+
+  /** Model that `generate()` uses for the active provider. */
+  getActiveModel(): string {
+    return this.openaiApiKey ? this.openaiModel : this.embeddingModel;
+  }
+
   /**
    * Generate embedding vector for the given text.
    * Tries OpenAI first if configured, falls back to Ollama.
