@@ -72,14 +72,14 @@ export class SearchService {
           LEAST(
             1.0,
             EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
-            + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
+            + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6::double precision ELSE 0 END
           ) AS recency_score,
           (
             GREATEST(0, 1 - (c.embedding <=> $1::vector)) * $7
             + LEAST(
                 1.0,
                 EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
-                + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6 ELSE 0 END
+                + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6::double precision ELSE 0 END
               ) * $8
           ) AS combined_score
         FROM conversations c
@@ -171,7 +171,7 @@ export class SearchService {
             LEAST(
               1.0,
               EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $7)
-              + CASE WHEN c.created_at >= NOW() - ($8::int * INTERVAL '1 day') THEN $9 ELSE 0 END
+              + CASE WHEN c.created_at >= NOW() - ($8::int * INTERVAL '1 day') THEN $9::double precision ELSE 0 END
             ) AS recency_score
           FROM conversations c
           LEFT JOIN keyword_search k ON c.id = k.id
