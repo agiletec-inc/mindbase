@@ -96,8 +96,10 @@ export function deriveSummary(body: string, maxLen = 140): string {
 /** Build the full `.mdx` document (frontmatter + body) for the media site. */
 export function formatMediaArticle(input: MediaArticleInput): string {
   const title = stripTitleLabel(input.title);
-  // Strip the same label from the body's first heading so the rendered H1 is clean.
-  const body = input.body.trim().replace(/^(#{1,6}\s+)(.+)$/m, (_m, hashes, text) => hashes + stripTitleLabel(text));
+  // The site renders the frontmatter `title` as the heading, so drop the body's
+  // own leading `# Title` H1 (the LLM is told to open with one) to avoid a
+  // duplicate title on the article page.
+  const body = input.body.trim().replace(/^#\s+[^\n]*\n+/, '');
 
   const frontmatter = [
     '---',
