@@ -32,7 +32,7 @@ services:
   # PostgreSQL 17 + pgvector
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: mindbase-postgres-dev
+    container_name: mindbase-postgres-canon
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mindbase}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mindbase_dev}
