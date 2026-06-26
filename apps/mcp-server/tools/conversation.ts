@@ -5,22 +5,26 @@
  * - SessionTools: session management
  * - SearchTools: semantic and hybrid search
  * - ContentTools: article generation and publishing
+ * - RetrievalTools: retrieval-pack assembly (no LLM calls)
  */
 
 import type { StorageBackend, ConversationItem, QueryFilters, TimelineOptions } from '../storage/interface.js';
 import { SessionTools } from './session-tools.js';
 import { SearchTools } from './search-tools.js';
 import { ContentTools } from './content-tools.js';
+import { RetrievalTools } from './retrieval-tools.js';
 
 export class ConversationTools {
   private sessionTools: SessionTools;
   private searchTools: SearchTools;
   private contentTools: ContentTools;
+  private retrievalTools: RetrievalTools;
 
   constructor(private storage: StorageBackend) {
     this.sessionTools = new SessionTools(storage);
     this.searchTools = new SearchTools(storage, this.formatItem);
     this.contentTools = new ContentTools(storage);
+    this.retrievalTools = new RetrievalTools(storage);
   }
 
   setCurrentSession(sessionId: string | undefined) {
@@ -115,6 +119,9 @@ export class ConversationTools {
   // --- Delegated: Content ---
   contentGenerate = (...a: Parameters<ContentTools['contentGenerate']>) => this.contentTools.contentGenerate(...a);
   contentPublish = (...a: Parameters<ContentTools['contentPublish']>) => this.contentTools.contentPublish(...a);
+
+  // --- Delegated: Retrieval ---
+  mindbaseDraft = (...a: Parameters<RetrievalTools['mindbaseDraft']>) => this.retrievalTools.mindbaseDraft(...a);
 
   // --- Cross-source ---
 

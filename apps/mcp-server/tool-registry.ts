@@ -421,6 +421,55 @@ const CONTENT_TOOLS: Tool[] = [
   },
 ];
 
+// Retrieval tools (context packs — no LLM calls)
+const RETRIEVAL_TOOLS: Tool[] = [
+  {
+    name: 'mindbase_draft',
+    description:
+      'Assemble a structured context pack from past conversations for writing an article/post — returns sources, chronological excerpts, a platform frontmatter skeleton, and writing notes; the caller writes the content. Provide exactly one of "topic" (semantic search) or "conversationIds" (explicit selection).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          description: 'Semantic search query for relevant past conversations (exactly one of topic/conversationIds required)',
+        },
+        conversationIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Explicit conversation IDs to include (exactly one of topic/conversationIds required)',
+        },
+        project: {
+          type: 'string',
+          description: 'Filter search results by project (only valid with topic)',
+        },
+        source: {
+          type: 'string',
+          enum: ['claude-code', 'claude-desktop', 'chatgpt', 'cursor', 'windsurf', 'gemini'],
+          description: 'Filter search results by source platform (only valid with topic)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of conversations to include (default: 8, max: 20)',
+        },
+        platform: {
+          type: 'string',
+          enum: ['zenn', 'qiita', 'note', 'blog'],
+          description: 'Target platform for the frontmatter skeleton and writing notes (default: "blog")',
+        },
+        maxExcerptChars: {
+          type: 'number',
+          description: 'Maximum characters per conversation excerpt (default: 1200)',
+        },
+        maxTotalChars: {
+          type: 'number',
+          description: 'Total character budget across all excerpts (default: 24000)',
+        },
+      },
+    },
+  },
+];
+
 // Memory tools
 const MEMORY_TOOLS: Tool[] = [
   {
@@ -555,5 +604,6 @@ export const TOOLS: Tool[] = [
   ...SESSION_TOOLS,
   ...CROSS_SOURCE_TOOLS,
   ...CONTENT_TOOLS,
+  ...RETRIEVAL_TOOLS,
   ...MEMORY_TOOLS,
 ];
