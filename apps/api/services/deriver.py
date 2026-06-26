@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
-from typing import Tuple
+from typing import Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api import crud
-from apps.api.models.conversation import RawConversation
-from apps.api.ollama_client import ollama_client
-from apps.api.schemas.conversation import ConversationCreate, ConversationResponse
-from apps.api.services import settings_store
-from apps.api.services.classifier import infer_project, infer_topics
-from apps.api.services.pipelines import run_post_derivation
+from app import crud
+from app.config import get_settings
+from app.models.conversation import RawConversation
+from app.ollama_client import ollama_client
+from app.schemas.conversation import ConversationCreate, ConversationResponse
+from app.services.classifier import infer_project, infer_topics
+from app.services.pipelines import run_post_derivation
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_text_from_content(content: dict) -> Tuple[str, int, str | None]:
@@ -28,6 +31,27 @@ def _extract_text_from_content(content: dict) -> Tuple[str, int, str | None]:
         return joined, len(flattened), raw_content
     content_str = str(content)
     return content_str, 0, None
+
+
+async def _generate_summary(text_content: str) -> Optional[str]:
+    """Generate a Japanese session summary via the configured SUMMARY_MODEL.
+
+    Failures are caught and logged so that a summary error never blocks the
+    conversation store. Returns None on failure; the caller stores summary=NULL.
+    """
+    settings = get_settings()
+    model = settings.SUMMARY_MODEL
+    if not text_content.strip():
+        return None
+    try:
+        return await ollama_client.generate_summary(text_content, model)
+    except Exception as exc:
+        logger.warning(
+            "Summary generation failed (model=%s): %s — storing summary=NULL",
+            model,
+            exc,
+        )
+        return None
 
 
 async def process_raw_conversation(
@@ -56,10 +80,9 @@ async def process_raw_conversation(
     # conversation_embeddings (keyed by provider/model), not the legacy
     # conversations.embedding column, so providers with different dimensions
     # can coexist.
-    provider, model = settings_store.get_active_embedding()
-    embedding = await ollama_client.embed(
-        text_content or " ", provider=provider, model=model
-    )
+    provider = ollama_client.active_provider
+    model = ollama_client.active_model
+    embedding = await ollama_client.embed(text_content or " ")
 
     project = infer_project(
         metadata=payload.metadata,
@@ -75,6 +98,8 @@ async def process_raw_conversation(
         metadata["project"] = project
     metadata["topics"] = topics
 
+    summary = await _generate_summary(text_content)
+
     conversation = await crud.create_conversation_record(
         db,
         payload,
@@ -85,6 +110,7 @@ async def process_raw_conversation(
         project=project,
         topics=topics,
         metadata=metadata,
+        summary=summary,
     )
     await crud.upsert_conversation_embedding(
         db, conversation.id, provider, model, embedding
@@ -107,6 +133,7 @@ async def process_raw_conversation(
         project=conversation.project,
         topics=conversation.topics or [],
         workspace_path=conversation.workspace_path,
+        summary=conversation.summary,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )

@@ -64,6 +64,7 @@ services:
       - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
       # Active embedding model is the settings store (SSoT), seeded by the API's
       # bge-m3 default. Set EMBEDDING_MODEL only to override that initial seed.
+      - SUMMARY_MODEL=${SUMMARY_MODEL:-qwen3:14b}
       - DEBUG=${DEBUG:-true}
     depends_on:
       postgres:
