@@ -27,12 +27,27 @@ class Settings(BaseSettings):
 
     # Ollama Embedding
     OLLAMA_URL: str
-    EMBEDDING_MODEL: str
-    EMBEDDING_DIMENSIONS: int
+    # Seed default for the active embedding model. The live source of truth is the
+    # settings store (services/settings_store.get_active_embedding); this env value
+    # only seeds it when the store has no choice yet.
+    EMBEDDING_MODEL: str = "bge-m3"
+    # Vestigial: the real dimension is derived from the embedding vector length
+    # (crud.column_for_dim). Kept only for the legacy conversations.embedding column.
+    EMBEDDING_DIMENSIONS: int = 1024
+
+    # Chat (LLM) — seed defaults only. The live source of truth is the settings
+    # store (services/settings_store.get_chat_settings); these seed it when unset.
+    CHAT_MODEL: str = "qwen2.5:3b"
+    CHAT_TEMPERATURE: float = 0.7
+    CHAT_MAX_TOKENS: int = 2048
+    CHAT_SYSTEM_PROMPT: str = (
+        "You are MindBase, a helpful assistant with access to the user's past "
+        "conversations. Use the provided context when relevant."
+    )
 
     # Ollama chat model for Japanese session summarisation.
     # Must be a model present on the Ollama instance (not an embedding model).
-    SUMMARY_MODEL: str
+    SUMMARY_MODEL: str = "qwen3:14b"
 
     # Max characters of input text per embedding call. Embedding models have a
     # fixed context window (bge-m3: 8192 tokens) and error on overflow, so long
