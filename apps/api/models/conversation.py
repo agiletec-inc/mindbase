@@ -22,7 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
-from apps.api.database import Base
+from app.database import Base
 
 
 class RawConversation(Base):
@@ -85,6 +85,10 @@ class Conversation(Base):
     # Derived metadata
     project = Column(String)
     topics = Column(ARRAY(String), default=list)
+
+    # AI-generated Japanese summary of the session (what was done / decided).
+    # NULL for records ingested before summary generation was added.
+    summary = Column(Text)
 
     # Timestamps
     source_created_at = Column(DateTime(timezone=True))

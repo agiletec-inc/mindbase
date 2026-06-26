@@ -77,23 +77,7 @@ class ConversationResponse(BaseModel):
     project: Optional[str]
     topics: List[str] = Field(default_factory=list)
     workspace_path: Optional[str]
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ConversationSummary(BaseModel):
-    """Lightweight conversation row for list views (no full content payload)."""
-
-    id: UUID
-    source: str
-    title: Optional[str]
-    project: Optional[str]
-    topics: List[str] = Field(default_factory=list)
-    message_count: int
-    workspace_path: Optional[str]
+    summary: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -128,22 +112,6 @@ class AppSettings(BaseModel):
     refreshIntervalMs: int = Field(
         15000, description="Menubar poll interval in milliseconds"
     )
-    # Active embedding selection — the single source of truth (persisted here).
-    # Null means "unset": the API seeds these from env defaults on read.
-    embeddingProvider: Optional[str] = Field(
-        None, description="Active embedding provider: 'ollama' | 'openai'"
-    )
-    embeddingModel: Optional[str] = Field(
-        None, description="Active embedding model name (from the model catalog)"
-    )
-    # Chat (LLM) selection — also a single source of truth, persisted here.
-    # Null means "unset": the API seeds these from env defaults on read.
-    chatModel: Optional[str] = Field(None, description="Active chat (LLM) model")
-    chatTemperature: Optional[float] = Field(
-        None, description="Chat sampling temperature"
-    )
-    chatMaxTokens: Optional[int] = Field(None, description="Chat max output tokens")
-    chatSystemPrompt: Optional[str] = Field(None, description="Chat system prompt")
     collectors: List[CollectorConfig] = Field(default_factory=list)
     pipelines: List[PipelineConfig] = Field(default_factory=list)
 
@@ -155,26 +123,6 @@ class CommandResult(BaseModel):
     returncode: int
     stdout: str
     stderr: str
-
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
-class ChatRequest(BaseModel):
-    """A chat turn. The backend resolves the model/params from the settings SSoT,
-    fetches RAG context, assembles the prompt, streams the LLM, and persists — so
-    the client just sends a message and renders the stream."""
-
-    message: str = Field(..., min_length=1, description="User message")
-    model: Optional[str] = Field(None, description="Override the active chat model")
-    history: List[ChatMessage] = Field(
-        default_factory=list, description="Prior turns in this session"
-    )
-    rag_limit: int = Field(3, ge=0, le=20, description="Past conversations to retrieve")
-    rag_threshold: float = Field(0.5, ge=0.0, le=1.0)
-    store: bool = Field(True, description="Persist this turn as a conversation")
 
 
 class SearchQuery(BaseModel):
@@ -228,53 +176,6 @@ class SearchResult(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class CompareModel(BaseModel):
-    """One (provider, model) pair to evaluate in a comparison."""
-
-    provider: str = Field("ollama", description="Embedding provider: 'ollama'|'openai'")
-    model: Optional[str] = Field(
-        None, description="Model name; defaults to the provider's configured model"
-    )
-
-
-class CompareRequest(BaseModel):
-    """Run one query against several embedding models, side by side.
-
-    Each model searches only its own stored vectors (per-model coexistence in
-    conversation_embeddings). Backfill coverage first with POST /conversations/reembed
-    so every model has vectors to compare fairly.
-    """
-
-    query: str = Field(..., description="Search query text", min_length=1)
-    models: List[CompareModel] = Field(
-        ..., min_length=1, description="Models to compare for the same query"
-    )
-    limit: int = Field(10, ge=1, le=100)
-    threshold: float = Field(0.0, ge=0.0, le=1.0, description="Similarity threshold")
-    source: Optional[str] = None
-    project: Optional[str] = None
-    topic: Optional[str] = None
-    workspace_path: Optional[str] = None
-
-
-class CompareModelResults(BaseModel):
-    """Ranked results for a single model within a comparison."""
-
-    provider: str
-    model: str
-    results: List[SearchResult] = Field(default_factory=list)
-    error: Optional[str] = Field(
-        None, description="Set if this model could not be embedded/searched"
-    )
-
-
-class CompareResponse(BaseModel):
-    """Side-by-side comparison of several models over one query."""
-
-    query: str
-    models: List[CompareModelResults]
 
 
 class ReembedRequest(BaseModel):

@@ -11,14 +11,13 @@ Model management (pull, delete, list) is delegated to services/model_manager.py.
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import AsyncIterator, Iterable, List, Tuple
+from typing import Iterable, List, Tuple
 
 import httpx
 
-from apps.api.config import get_settings
-from apps.api.services.model_manager import ModelManager
+from app.config import get_settings
+from app.services.model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -177,36 +176,6 @@ class EmbeddingClient:
             return [await self._ollama_embed(text, mdl) for text in text_list]
         raise ValueError(f"Unknown embedding provider: {prov!r}")
 
-    async def chat(
-        self,
-        messages: List[dict],
-        model: str,
-        options: dict | None = None,
-    ) -> AsyncIterator[str]:
-        """Stream an Ollama chat completion, yielding content deltas.
-
-        Chat orchestration (RAG, prompt assembly, persistence) lives in the API
-        route; this is just the transport so the LLM call stays on the server and
-        clients never talk to Ollama directly.
-        """
-        url = f"{self.ollama_url}/api/chat"
-        payload: dict = {"model": model, "messages": messages, "stream": True}
-        if options:
-            payload["options"] = options
-
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            async with client.stream("POST", url, json=payload) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
-                    data = json.loads(line)
-                    delta = (data.get("message") or {}).get("content")
-                    if delta:
-                        yield delta
-                    if data.get("done"):
-                        break
-
     async def health_check(self) -> bool:
         """Return True if the active provider responds successfully."""
         if self.provider == OPENAI:
@@ -232,6 +201,42 @@ class EmbeddingClient:
 
     async def delete_model(self, model_name: str) -> bool:
         return await self._model_manager.delete_model(model_name)
+
+    # ----------------------------------------------------------- text generation
+    async def generate_summary(self, text: str, model: str) -> str:
+        """Generate a Japanese summary of a conversation using an Ollama chat model.
+
+        Args:
+            text: Concatenated conversation text to summarise.
+            model: Ollama model name (must be a generation model, not an embedding model).
+
+        Returns:
+            Japanese summary string.
+
+        Raises:
+            httpx.HTTPStatusError: on non-2xx response from Ollama.
+            ValueError: if the response does not contain a 'response' field.
+        """
+        prompt = (
+            "以下の会話を日本語で要約してください。"
+            "何をして、何が決まったか・何が残課題かを簡潔に（300字以内）まとめてください。\n\n"
+            "会話内容:\n" + text[:6000]
+        )
+        url = f"{self.ollama_url}/api/generate"
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                url,
+                json={"model": model, "prompt": prompt, "stream": False},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        summary = data.get("response")
+        if summary is None:
+            raise ValueError(
+                f"Ollama /api/generate did not return 'response' field: {data}"
+            )
+        return summary.strip()
 
     # ----------------------------------------------------- compatibility wraps
     async def generate_embedding(self, text: str) -> List[float]:

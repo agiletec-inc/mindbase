@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import List, Optional
-from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.models.conversation import Conversation, RawConversation
-from apps.api.schemas.conversation import ConversationCreate
+from app.models.conversation import Conversation, RawConversation
+from app.schemas.conversation import ConversationCreate
 
 
 async def create_raw_conversation(
@@ -49,10 +49,21 @@ async def create_conversation_record(
     project: Optional[str],
     topics: List[str],
     metadata: dict,
+    summary: Optional[str] = None,
 ) -> Conversation:
-    """Create the derived conversation record linked to a raw entry."""
+    """Upsert the derived conversation record linked to a raw entry.
 
-    db_conversation = Conversation(
+    Uses ON CONFLICT (source, source_conversation_id) DO UPDATE so that
+    re-storing the same source conversation updates content, summary, and
+    timestamps rather than raising a unique-constraint violation.
+
+    Note: conv_metadata maps to the DB column "metadata" (Column("metadata", ...)).
+    The excluded pseudo-table uses DB column names, so we reference "metadata" there.
+    """
+
+    # Build the INSERT using DB column names for columns that have an alias.
+    # conv_metadata → DB column "metadata"; pass via model's mapped attr in values().
+    insert_stmt = pg_insert(Conversation).values(
         raw_id=raw_record.id,
         source=conversation.source,
         source_conversation_id=conversation.source_conversation_id,
@@ -60,43 +71,39 @@ async def create_conversation_record(
         title=conversation.title,
         content=conversation.content,
         raw_content=raw_content,
-        conv_metadata=metadata,
+        conv_metadata=metadata,  # ORM attr name maps to "metadata" column
         source_created_at=conversation.source_created_at,
         embedding=embedding,
         message_count=message_count,
         project=project,
         topics=topics,
+        summary=summary,
     )
-    db.add(db_conversation)
+
+    upsert_stmt = insert_stmt.on_conflict_do_update(
+        index_elements=[Conversation.source, Conversation.source_conversation_id],
+        set_={
+            # Use DB column names for excluded references.
+            # conv_metadata → "metadata"; all others match the Python attr name.
+            "raw_id": insert_stmt.excluded.raw_id,
+            "content": insert_stmt.excluded.content,
+            "raw_content": insert_stmt.excluded.raw_content,
+            "metadata": insert_stmt.excluded.metadata,  # DB col name, not Python attr
+            "message_count": insert_stmt.excluded.message_count,
+            "title": insert_stmt.excluded.title,
+            "project": insert_stmt.excluded.project,
+            "topics": insert_stmt.excluded.topics,
+            "summary": insert_stmt.excluded.summary,
+            "updated_at": func.now(),
+        },
+    ).returning(Conversation.id)
+
+    result = await db.execute(upsert_stmt)
+    conversation_id = result.scalar_one()
     await db.flush()
-    await db.refresh(db_conversation)
-    return db_conversation
 
-
-async def list_conversations(
-    db: AsyncSession,
-    *,
-    limit: int = 50,
-    offset: int = 0,
-    source: Optional[str] = None,
-    project: Optional[str] = None,
-) -> List[Conversation]:
-    """Return derived conversations, newest first (backend is the store-of-record)."""
-    stmt = select(Conversation).order_by(Conversation.created_at.desc())
-    if source:
-        stmt = stmt.where(Conversation.source == source)
-    if project:
-        stmt = stmt.where(Conversation.project == project)
-    stmt = stmt.limit(limit).offset(offset)
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
-
-
-async def get_conversation(
-    db: AsyncSession, conversation_id: UUID
-) -> Optional[Conversation]:
-    """Fetch a single derived conversation by id (with its full content payload)."""
-    result = await db.execute(
+    fetched = await db.execute(
         select(Conversation).where(Conversation.id == conversation_id)
     )
-    return result.scalar_one_or_none()
+    db_conversation = fetched.scalar_one()
+    return db_conversation
