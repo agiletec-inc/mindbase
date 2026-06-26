@@ -22,9 +22,17 @@ ALTER TABLE conversations
     ADD COLUMN IF NOT EXISTS raw_id UUID,
     ADD COLUMN IF NOT EXISTS workspace_path TEXT;
 
-ALTER TABLE conversations
-    ADD CONSTRAINT IF NOT EXISTS fk_conversations_raw
+-- Postgres has no "ADD CONSTRAINT IF NOT EXISTS"; guard it so re-runs are idempotent.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_conversations_raw'
+  ) THEN
+    ALTER TABLE conversations
+      ADD CONSTRAINT fk_conversations_raw
         FOREIGN KEY (raw_id) REFERENCES raw_conversations(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_conversations_workspace_path
     ON conversations(workspace_path);

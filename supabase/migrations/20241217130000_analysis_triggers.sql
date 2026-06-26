@@ -121,7 +121,7 @@ BEGIN
         AND NEW.completion_percentage < 60 
         AND (last_synthesis IS NULL OR last_synthesis < NOW() - INTERVAL '24 hours') THEN
         
-        RAISE NOTICE 'Section % may benefit from synthesis (% patterns available, %% complete)', 
+        RAISE NOTICE 'Section % may benefit from synthesis (% patterns available, % percent complete)',
             NEW.title, pattern_count, NEW.completion_percentage;
     END IF;
     
@@ -347,9 +347,11 @@ SELECT
     AVG(tp.confidence_score) as avg_pattern_confidence,
     bs.updated_at as last_updated
 FROM book_structure bs
+-- "x ILIKE '%' || ANY(arr) || '%'" is not valid SQL. Match the title against any
+-- theme/keyword substring via unnest+EXISTS.
 LEFT JOIN thought_patterns tp ON (
-    bs.title ILIKE '%' || ANY(tp.themes) || '%'
-    OR bs.title ILIKE '%' || ANY(tp.keywords) || '%'
+    EXISTS (SELECT 1 FROM unnest(tp.themes) AS t WHERE bs.title ILIKE '%' || t || '%')
+    OR EXISTS (SELECT 1 FROM unnest(tp.keywords) AS k WHERE bs.title ILIKE '%' || k || '%')
 )
 WHERE bs.level > 1 
     AND bs.completion_percentage < 80
