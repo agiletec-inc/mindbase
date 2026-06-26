@@ -145,11 +145,15 @@ importers:
         specifier: ^7.0.3
         version: 7.2.4(@types/node@24.10.1)(jiti@1.21.7)(tsx@4.20.6)
 
+  libs/embedding: {}
+
   libs/generators:
     dependencies:
       tsx:
         specifier: ^4.20.6
         version: 4.20.6
+
+  libs/markdown: {}
 
   libs/processors:
     dependencies:
