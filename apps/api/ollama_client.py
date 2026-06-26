@@ -16,8 +16,8 @@ from typing import Iterable, List, Tuple
 
 import httpx
 
-from app.config import get_settings
-from app.services.model_manager import ModelManager
+from apps.api.config import get_settings
+from apps.api.services.model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
 

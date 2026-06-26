@@ -8,13 +8,13 @@ from typing import Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import crud
-from app.config import get_settings
-from app.models.conversation import RawConversation
-from app.ollama_client import ollama_client
-from app.schemas.conversation import ConversationCreate, ConversationResponse
-from app.services.classifier import infer_project, infer_topics
-from app.services.pipelines import run_post_derivation
+from apps.api import crud
+from apps.api.config import get_settings
+from apps.api.models.conversation import RawConversation
+from apps.api.ollama_client import ollama_client
+from apps.api.schemas.conversation import ConversationCreate, ConversationResponse
+from apps.api.services.classifier import infer_project, infer_topics
+from apps.api.services.pipelines import run_post_derivation
 
 logger = logging.getLogger(__name__)
 
