@@ -191,9 +191,7 @@ class CursorCollector(BaseCollector):
         # *cursor*/*ai* subdir scan below misses these entirely.
         state_db = storage_path / "state.vscdb"
         if state_db.exists():
-            conversations.extend(
-                self._collect_from_cursordiskkv(state_db, since_date)
-            )
+            conversations.extend(self._collect_from_cursordiskkv(state_db, since_date))
 
         # Look for Cursor AI extension data
         cursor_dirs = list(storage_path.glob("*cursor*"))

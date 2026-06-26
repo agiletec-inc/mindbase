@@ -40,7 +40,8 @@ class ClaudeDesktopCollector(BaseCollector):
                     # Local Agent Mode keeps full transcripts as audit.jsonl per
                     # session (the IndexedDB/Local Storage paths above only hold a
                     # thin claude.ai cache).
-                    home / "Library/Application Support/Claude/local-agent-mode-sessions",
+                    home
+                    / "Library/Application Support/Claude/local-agent-mode-sessions",
                 ]
             )
 
