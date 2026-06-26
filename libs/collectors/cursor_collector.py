@@ -186,6 +186,13 @@ class CursorCollector(BaseCollector):
         """Collect from global storage"""
         conversations = []
 
+        # Modern Cursor stores composer/agent chats in globalStorage/state.vscdb
+        # under the cursorDiskKV table (composerData:* + bubbleId:*). The legacy
+        # *cursor*/*ai* subdir scan below misses these entirely.
+        state_db = storage_path / "state.vscdb"
+        if state_db.exists():
+            conversations.extend(self._collect_from_cursordiskkv(state_db, since_date))
+
         # Look for Cursor AI extension data
         cursor_dirs = list(storage_path.glob("*cursor*"))
         cursor_dirs.extend(list(storage_path.glob("*ai*")))
@@ -206,6 +213,108 @@ class CursorCollector(BaseCollector):
                     convs = self._collect_from_json(json_file, since_date)
                     conversations.extend(convs)
 
+        return conversations
+
+    @staticmethod
+    def _cursor_epoch(value: Any) -> datetime:
+        try:
+            return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
+        except (TypeError, ValueError):
+            return datetime.now(timezone.utc)
+
+    def _collect_from_cursordiskkv(
+        self, db_file: Path, since_date: Optional[datetime]
+    ) -> List[Conversation]:
+        """Collect modern Cursor composer chats from the cursorDiskKV table.
+
+        composerData:<cid> holds metadata + an ordered fullConversationHeadersOnly
+        list of {bubbleId, type}; each bubbleId:<cid>:<bid> row holds one message
+        (type "1"=user, "2"=assistant) with its text.
+        """
+        conversations: List[Conversation] = []
+        try:
+            conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+        except Exception as exc:
+            logger.debug("cursorDiskKV open failed %s: %s", db_file, exc)
+            return conversations
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='cursorDiskKV'"
+            )
+            if not cur.fetchone():
+                return conversations  # older Cursor without this table
+
+            cur.execute(
+                "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'"
+            )
+            for key, value in cur.fetchall():
+                try:
+                    data = json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                cid = data.get("composerId") or key.split(":", 1)[-1]
+                headers = data.get("fullConversationHeadersOnly")
+                if not isinstance(headers, list) or not headers:
+                    continue
+
+                messages: List[Message] = []
+                for hdr in headers:
+                    if not isinstance(hdr, dict):
+                        continue
+                    bid = hdr.get("bubbleId")
+                    if not bid:
+                        continue
+                    cur.execute(
+                        "SELECT value FROM cursorDiskKV WHERE key = ?",
+                        (f"bubbleId:{cid}:{bid}",),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        continue
+                    try:
+                        bubble = json.loads(row[0])
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    text = (bubble.get("text") or "").strip()
+                    if not text:
+                        continue  # tool/diff/empty bubble
+                    role = "user" if str(bubble.get("type")) == "1" else "assistant"
+                    messages.append(
+                        Message(
+                            role=role,
+                            content=text,
+                            timestamp=datetime.now(timezone.utc),
+                        )
+                    )
+
+                if not messages:
+                    continue
+
+                created_at = self._cursor_epoch(data.get("createdAt"))
+                title = (data.get("name") or "").strip() or self.extract_title(
+                    {"messages": messages}
+                )
+                conversations.append(
+                    Conversation(
+                        id=cid,
+                        source=self.source_name,
+                        title=title,
+                        messages=messages,
+                        created_at=created_at,
+                        updated_at=self._cursor_epoch(data.get("lastUpdatedAt"))
+                        or created_at,
+                        thread_id=cid,
+                        metadata={"composer": True},
+                    )
+                )
+        finally:
+            conn.close()
+        logger.info(
+            "Extracted %d Cursor composer chats from %s",
+            len(conversations),
+            db_file.name,
+        )
         return conversations
 
     def _collect_from_local_storage(

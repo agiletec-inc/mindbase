@@ -37,6 +37,11 @@ class ClaudeDesktopCollector(BaseCollector):
                     home / "Library/Application Support/Claude/Session Storage",
                     home / "Library/Application Support/Claude/IndexedDB",
                     home / "Library/Application Support/Claude/Local Storage",
+                    # Local Agent Mode keeps full transcripts as audit.jsonl per
+                    # session (the IndexedDB/Local Storage paths above only hold a
+                    # thin claude.ai cache).
+                    home
+                    / "Library/Application Support/Claude/local-agent-mode-sessions",
                 ]
             )
 
@@ -71,7 +76,15 @@ class ClaudeDesktopCollector(BaseCollector):
             logger.info(f"Checking path: {data_path}")
 
             # Try different storage types
-            if "Session Storage" in str(data_path):
+            if "local-agent-mode-sessions" in str(data_path):
+                conversations = self._collect_from_agent_mode(data_path, since_date)
+                all_conversations.extend(conversations)
+                # audit.jsonl is the authoritative transcript; skip the generic
+                # JSON-export glob below for this tree (session metadata files
+                # are not standalone conversations).
+                continue
+
+            elif "Session Storage" in str(data_path):
                 conversations = self._collect_from_session_storage(
                     data_path, since_date
                 )
@@ -109,6 +122,125 @@ class ClaudeDesktopCollector(BaseCollector):
             f"Collected {len(all_conversations)} conversations from {self.source_name}"
         )
         return all_conversations
+
+    def _collect_from_agent_mode(
+        self, base_path: Path, since_date: Optional[datetime]
+    ) -> List[Conversation]:
+        """Collect Local Agent Mode transcripts.
+
+        Each session is `.../local_<uuid>/audit.jsonl` (a JSONL event log) with a
+        sibling `local_<uuid>.json` metadata file. We keep the human turns and the
+        assistant's text blocks; tool_use / tool_result / thinking / system events
+        are skipped so the transcript reads as a real conversation.
+        """
+        conversations: List[Conversation] = []
+        for audit in base_path.glob("**/local_*/audit.jsonl"):
+            try:
+                conv = self._parse_agent_mode_session(audit)
+                if conv and conv.messages:
+                    conversations.append(conv)
+            except Exception as exc:  # one bad session must not abort the rest
+                logger.warning("Failed to parse agent-mode session %s: %s", audit, exc)
+                self.stats["errors"] += 1
+        logger.info("Extracted %d agent-mode sessions", len(conversations))
+        return conversations
+
+    @staticmethod
+    def _agent_mode_text(content: Any) -> str:
+        """Flatten a message 'content' (str, or list of blocks) to plain text."""
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            parts = [
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            ]
+            return "\n".join(p for p in parts if p).strip()
+        return ""
+
+    def _parse_agent_mode_session(self, audit_path: Path) -> Optional[Conversation]:
+        # Sibling metadata file: .../local_<uuid>.json next to .../local_<uuid>/
+        meta_path = audit_path.parent.with_suffix(".json")
+        meta: Dict[str, Any] = {}
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                logger.debug("agent-mode meta unreadable %s: %s", meta_path, exc)
+
+        def epoch_ms(value: Any) -> Optional[datetime]:
+            try:
+                return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
+            except (TypeError, ValueError):
+                return None
+
+        created_at = epoch_ms(meta.get("createdAt"))
+        updated_at = epoch_ms(meta.get("lastActivityAt")) or created_at
+        session_id = meta.get("sessionId") or audit_path.parent.name
+        title = meta.get("title")
+        model = meta.get("model")
+
+        messages: List[Message] = []
+        prev_key: Optional[tuple] = None
+        with open(audit_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("type") not in ("user", "assistant"):
+                    continue
+                msg = event.get("message") or {}
+                role = msg.get("role")
+                if role not in ("user", "assistant"):
+                    continue
+                text = self._agent_mode_text(msg.get("content"))
+                if not text:
+                    continue  # tool_result / tool_use / thinking-only turn
+                key = (role, text)
+                if key == prev_key:
+                    continue  # collapse the occasional duplicated turn
+                prev_key = key
+                ts = self.normalize_timestamp(
+                    event.get("_audit_timestamp")
+                    or updated_at
+                    or datetime.now(timezone.utc)
+                )
+                messages.append(
+                    Message(
+                        role=role,
+                        content=text,
+                        timestamp=ts,
+                        metadata={"model": model} if model else {},
+                    )
+                )
+
+        if not messages:
+            return None
+        if not created_at:
+            created_at = messages[0].timestamp
+        if not updated_at:
+            updated_at = messages[-1].timestamp
+        if not title:
+            title = self.extract_title({"messages": messages})
+
+        conv_meta: Dict[str, Any] = {"agent_mode": True}
+        if model:
+            conv_meta["model"] = model
+        return Conversation(
+            id=session_id,
+            source=self.source_name,
+            title=title,
+            messages=messages,
+            created_at=created_at,
+            updated_at=updated_at,
+            thread_id=session_id,
+            metadata=conv_meta,
+        )
 
     def _collect_from_session_storage(
         self, storage_path: Path, since_date: Optional[datetime]
