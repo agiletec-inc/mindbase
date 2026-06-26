@@ -6,11 +6,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
-from app import crud
-from app.database import get_db
-from app.ollama_client import ollama_client
-from app.schemas.conversation import (
+from apps.api.config import get_settings
+from apps.api import crud
+from apps.api.database import get_db
+from apps.api.ollama_client import ollama_client
+from apps.api.schemas.conversation import (
     ConversationCreate,
     ConversationQueuedResponse,
     ConversationResponse,
@@ -19,7 +19,10 @@ from app.schemas.conversation import (
     SearchQuery,
     SearchResult,
 )
-from app.services.deriver import _extract_text_from_content, process_raw_conversation
+from apps.api.services.deriver import (
+    _extract_text_from_content,
+    process_raw_conversation,
+)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 logger = logging.getLogger(__name__)
@@ -115,7 +118,9 @@ async def search_conversations_endpoint(
             # records ingested before summary generation was added.
             row_summary = getattr(row, "summary", None)
             if row_summary:
-                preview = row_summary[:200] + "..." if len(row_summary) > 200 else row_summary
+                preview = (
+                    row_summary[:200] + "..." if len(row_summary) > 200 else row_summary
+                )
             elif "messages" in row.content:
                 messages = row.content["messages"]
                 first_message = messages[0].get("content", "") if messages else ""

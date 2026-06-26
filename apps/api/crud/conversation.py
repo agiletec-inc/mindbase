@@ -9,8 +9,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.conversation import Conversation, RawConversation
-from app.schemas.conversation import ConversationCreate
+from apps.api.models.conversation import Conversation, RawConversation
+from apps.api.schemas.conversation import ConversationCreate
 
 
 async def create_raw_conversation(
