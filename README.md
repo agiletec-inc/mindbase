@@ -7,17 +7,7 @@
 
 ## 🌟 Part of the AIRIS Ecosystem
 
-MindBase is the **memory substrate** of the **AIRIS Suite** - providing persistent, semantic conversation history across all AI coding assistants.
-
-### The AIRIS Suite
-
-| Component | Purpose | For Who |
-|-----------|---------|---------|
-| **[airis-agent](https://github.com/agiletec-inc/airis-agent)** | 🧠 Intelligence layer for all editors (confidence checks, deep research, self-review) | All developers using Claude Code, Cursor, Windsurf, Codex, Gemini CLI |
-| **[airis-mcp-gateway](https://github.com/agiletec-inc/airis-mcp-gateway)** | 🚪 Unified MCP proxy with 90% token reduction via lazy loading | Claude Code users who want faster startup |
-| **mindbase** (this repo) | 💾 Local cross-session memory with semantic search | Developers who want persistent conversation history |
-| **[airis-workspace](https://github.com/agiletec-inc/airis-workspace)** | 🏗️ Docker-first monorepo manager | Teams building monorepos |
-| **[airiscode](https://github.com/agiletec-inc/airiscode)** | 🖥️ Terminal-first autonomous coding agent | CLI-first developers |
+MindBase is the **memory substrate** of the **AIRIS Suite** - providing persistent, semantic conversation history across all AI coding assistants. See the full [AIRIS Suite](https://github.com/agiletec-inc) on the org page.
 
 ### MCP Servers (Included via Gateway)
 
