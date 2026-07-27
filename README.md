@@ -255,7 +255,7 @@ Explore other tools in the AIRIS ecosystem:
 - **[airis-mcp-supabase-selfhost](https://github.com/agiletec-inc/airis-mcp-supabase-selfhost)** - Self-hosted Supabase MCP with RLS support
 - **[airis-workspace](https://github.com/agiletec-inc/airis-workspace)** - Docker-first monorepo manager
 - **[cmd-ime](https://github.com/agiletec-inc/cmd-ime)** - macOS IME switcher (Cmd key toggle)
-- **[neural](https://github.com/agiletec-inc/neural)** - Local LLM translation tool (DeepL alternative)
+- **[airis-translate](https://github.com/agiletec-inc/airis-translate)** - Local LLM translation tool (DeepL alternative)
 - **[airiscode](https://github.com/agiletec-inc/airiscode)** - Terminal-first autonomous coding agent
 
 ---
