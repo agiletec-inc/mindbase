@@ -10,7 +10,7 @@ on:
 
 jobs:
   publish:
-    uses: agiletec-inc/.github/.github/workflows/docker-ghcr-publish.yml@main
+    uses: agiletec-inc/github-actions/.github/workflows/docker-ghcr-publish.yml@main
     with:
       image-name: mindbase-mcp
       dockerfile: ./apps/mcp-server/Dockerfile
