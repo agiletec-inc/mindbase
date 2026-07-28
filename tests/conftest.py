@@ -9,6 +9,7 @@ from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
+from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
@@ -29,7 +30,6 @@ async def async_client(
     test_engine: AsyncEngine,
 ) -> AsyncGenerator["AsyncClient", None]:
     """Async HTTP client bound to the FastAPI app."""
-    from httpx import AsyncClient
     from apps.api.main import app
     from apps.api.database import get_db
 

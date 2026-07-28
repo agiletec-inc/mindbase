@@ -8,31 +8,13 @@
   "devDependencies": {},
   "name": "airis-mindbase",
   "packageManager": "pnpm@10.22.0",
-  "pnpm": {
-    "allowedScripts": {},
-    "onlyBuiltDependencies": [],
-    "overrides": {
-      "@modelcontextprotocol/sdk": ">=1.25.2",
-      "body-parser": ">=2.2.1",
-      "glob": ">=10.5.0",
-      "js-yaml": ">=4.1.1",
-      "qs": ">=6.14.1",
-      "path-to-regexp": ">=8.4.0",
-      "picomatch": ">=4.0.4",
-      "react-router": ">=7.12.0",
-      "react-router-dom": ">=7.12.0"
-    },
-    "peerDependencyRules": {
-      "allowedVersions": {},
-      "ignoreMissing": []
-    }
-  },
   "private": true,
   "scripts": {
-    "build": "echo 'Run: airis build'",
-    "dev": "echo 'Run: airis dev'",
-    "lint": "echo 'Run: airis lint'",
-    "test": "echo 'Run: airis test'"
+    "build": "pnpm -r --if-present build",
+    "dev": "pnpm -r --parallel --if-present dev",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck"
   },
   "type": "module",
   "version": "0.0.0",
