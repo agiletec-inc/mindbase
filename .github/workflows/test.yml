@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Run Tests
+  repo-quality-gate:
+    name: repo-quality-gate
     runs-on: ubuntu-latest
 
     services:
@@ -49,6 +49,11 @@ jobs:
       - name: Install TypeScript dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Lint Python
+        run: |
+          uv run black --check apps/api/ libs/collectors/
+          uv run ruff check apps/api/ libs/collectors/ tests/
+
       - name: Run Python tests
         env:
           DATABASE_URL: postgresql+asyncpg://mindbase:mindbase_dev@localhost:5432/mindbase_test
@@ -67,29 +72,3 @@ jobs:
           files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
-
-  lint:
-    name: Lint Code
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Install dependencies (uv workspace)
-        run: uv sync --all-packages
-
-      - name: Run Black
-        run: uv run black --check apps/api/ libs/collectors/
-
-      - name: Run Ruff
-        run: uv run ruff check apps/api/ libs/collectors/
-
-      - name: Run mypy
-        continue-on-error: true  # TODO: Fix mypy configuration
-        run: uv run mypy apps/api/ libs/collectors/
