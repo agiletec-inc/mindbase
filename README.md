@@ -274,4 +274,4 @@ MindBase is released under the [MIT License](LICENSE).
 
 **Built with ❤️ by the [Agiletec](https://github.com/agiletec-inc) team**
 
-**[Agiletec Inc.](https://github.com/agiletec-inc)** | **[Documentation](docs/)** | **[Issues](https://github.com/agiletec-inc/mindbase/issues)** | **[Discussions](https://github.com/agiletec-inc/mindbase/discussions)**
+**[AGILE TECHNOLOGY, K.K.](https://github.com/agiletec-inc)** | **[Documentation](docs/)** | **[Issues](https://github.com/agiletec-inc/mindbase/issues)** | **[Discussions](https://github.com/agiletec-inc/mindbase/discussions)**
