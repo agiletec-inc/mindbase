@@ -48,9 +48,7 @@ def load_collector(source: str):
     import importlib
 
     if source not in COLLECTORS:
-        raise SystemExit(
-            f"Unknown source '{source}'. Choices: {', '.join(COLLECTORS)}"
-        )
+        raise SystemExit(f"Unknown source '{source}'. Choices: {', '.join(COLLECTORS)}")
     mod_name, cls_name = COLLECTORS[source]
     mod = importlib.import_module(mod_name)
     return getattr(mod, cls_name)()
@@ -85,7 +83,9 @@ def to_payload(conv: Conversation) -> dict:
     }
 
 
-def post_conversation(api_url: str, payload: dict, timeout: float = 60.0) -> tuple[bool, str]:
+def post_conversation(
+    api_url: str, payload: dict, timeout: float = 60.0
+) -> tuple[bool, str]:
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         f"{api_url.rstrip('/')}/conversations/store",
@@ -105,9 +105,15 @@ def post_conversation(api_url: str, payload: dict, timeout: float = 60.0) -> tup
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--source", required=True, choices=list(COLLECTORS))
-    ap.add_argument("--since", help="ISO date, e.g. 2024-01-01 — only newer conversations")
-    ap.add_argument("--limit", type=int, default=0, help="Max conversations to send (0 = all)")
-    ap.add_argument("--dry-run", action="store_true", help="Collect and report, do not POST")
+    ap.add_argument(
+        "--since", help="ISO date, e.g. 2024-01-01 — only newer conversations"
+    )
+    ap.add_argument(
+        "--limit", type=int, default=0, help="Max conversations to send (0 = all)"
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="Collect and report, do not POST"
+    )
     ap.add_argument(
         "--export-file",
         help="Path to an official export JSON (ChatGPT/Claude). Overrides default scan paths.",

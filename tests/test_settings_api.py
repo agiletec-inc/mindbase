@@ -21,7 +21,9 @@ async def test_settings_roundtrip(async_client: AsyncClient, tmp_path: Path) -> 
         "workspaceRoot": "/workspaces/mindbase",
         "repoRoot": "/Users/me/github/mindbase",
         "refreshIntervalMs": 10000,
-        "collectors": [{"id": "claude-code", "label": "Claude Code", "workspace": "mindbase"}],
+        "collectors": [
+            {"id": "claude-code", "label": "Claude Code", "workspace": "mindbase"}
+        ],
         "pipelines": [{"id": "raw", "label": "RAW Ingestion"}],
     }
     path.write_text(json.dumps(default_payload), encoding="utf-8")

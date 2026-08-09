@@ -4,7 +4,9 @@ from apps.api.services.classifier import infer_project, infer_topics
 
 
 def test_infer_topics_with_keywords() -> None:
-    text = "Docker containers and docker-compose scripts control the workspace deployment"
+    text = (
+        "Docker containers and docker-compose scripts control the workspace deployment"
+    )
     topics = infer_topics(text)
     assert topics == ["Docker-First Development"]
 

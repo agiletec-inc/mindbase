@@ -6,6 +6,8 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+
+
 @pytest.mark.asyncio
 async def test_store_conversation_persists_metadata(
     async_client: AsyncClient,
@@ -48,7 +50,10 @@ async def test_store_conversation_persists_metadata(
     )
     assert search_response.status_code == 200
     results = search_response.json()
-    assert any(item["id"] == data["id"] and item["raw_id"] == data["raw_id"] for item in results)
+    assert any(
+        item["id"] == data["id"] and item["raw_id"] == data["raw_id"]
+        for item in results
+    )
     assert any(item["topics"] == ["Docker-First Development"] for item in results)
     assert all(item["workspace_path"] == "/workspaces/platform" for item in results)
 
