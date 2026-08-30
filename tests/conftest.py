@@ -1,6 +1,7 @@
 """
 Pytest configuration and shared fixtures for MindBase tests.
 """
+
 import os
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -58,6 +59,7 @@ async def async_client(
 # Test Configuration
 # ========================================
 
+
 @pytest.fixture(scope="session")
 def test_settings() -> Settings:
     """Test-specific settings.
@@ -68,12 +70,12 @@ def test_settings() -> Settings:
     return Settings(
         DATABASE_URL=os.getenv(
             "TEST_DATABASE_URL",
-            os.getenv("DATABASE_URL", "postgresql+asyncpg://mindbase:mindbase_dev@postgres:5432/mindbase_test")
+            os.getenv(
+                "DATABASE_URL",
+                "postgresql+asyncpg://mindbase:mindbase_dev@postgres:5432/mindbase_test",
+            ),
         ),
-        OLLAMA_URL=os.getenv(
-            "TEST_OLLAMA_URL",
-            os.getenv("OLLAMA_URL", "")
-        ),
+        OLLAMA_URL=os.getenv("TEST_OLLAMA_URL", os.getenv("OLLAMA_URL", "")),
         EMBEDDING_MODEL=os.getenv("EMBEDDING_MODEL", "qwen3-embedding:8b"),
         EMBEDDING_DIMENSIONS=int(os.getenv("EMBEDDING_DIMENSIONS", "1024")),
         DEBUG=True,
@@ -83,6 +85,7 @@ def test_settings() -> Settings:
 # ========================================
 # Database Fixtures
 # ========================================
+
 
 @pytest_asyncio.fixture(scope="session")
 async def ensure_test_database(test_settings: Settings) -> None:
@@ -165,11 +168,10 @@ async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, N
         await session.rollback()
 
 
-
-
 # ========================================
 # File System Fixtures
 # ========================================
+
 
 @pytest.fixture
 def test_data_dir() -> Path:
@@ -194,6 +196,7 @@ def temp_archive_dir(tmp_path: Path) -> Path:
 # ========================================
 # Mock Fixtures
 # ========================================
+
 
 @pytest.fixture
 def mock_ollama_response() -> dict:
@@ -231,10 +234,14 @@ def stub_ollama_requests(monkeypatch, test_settings: Settings):
 
     # Ensure shared client uses the same behaviour. Signatures mirror
     # EmbeddingClient.embed/embed_batch, which accept provider/model overrides.
-    async def fake_embed(text: str, provider: str | None = None, model: str | None = None):
+    async def fake_embed(
+        text: str, provider: str | None = None, model: str | None = None
+    ):
         return [0.1] * test_settings.EMBEDDING_DIMENSIONS
 
-    async def fake_embed_batch(texts, provider: str | None = None, model: str | None = None):
+    async def fake_embed_batch(
+        texts, provider: str | None = None, model: str | None = None
+    ):
         return [[0.1] * test_settings.EMBEDDING_DIMENSIONS for _ in texts]
 
     monkeypatch.setattr(ollama_client, "embed", fake_embed, raising=False)
@@ -285,7 +292,9 @@ def sample_conversation_data(sample_conversation_messages) -> dict:
     """Dataclass-friendly conversation for collector tests."""
 
     def to_datetime(value: str) -> datetime:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(
+            timezone.utc
+        )
 
     messages = [
         Message(
@@ -338,20 +347,17 @@ def api_conversation_payload(sample_conversation_messages) -> dict:
 # Pytest Hooks
 # ========================================
 
+
 def pytest_configure(config):
     """Configure pytest with custom markers."""
-    config.addinivalue_line(
-        "markers", "unit: mark test as unit test (fast, isolated)"
-    )
+    config.addinivalue_line("markers", "unit: mark test as unit test (fast, isolated)")
     config.addinivalue_line(
         "markers", "integration: mark test as integration test (requires services)"
     )
     config.addinivalue_line(
         "markers", "e2e: mark test as end-to-end test (full pipeline)"
     )
-    config.addinivalue_line(
-        "markers", "slow: mark test as slow (>1s execution)"
-    )
+    config.addinivalue_line("markers", "slow: mark test as slow (>1s execution)")
 
 
 def pytest_collection_modifyitems(config, items):

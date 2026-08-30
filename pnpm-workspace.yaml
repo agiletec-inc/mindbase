@@ -26,7 +26,7 @@ onlyBuiltDependencies: []
 overrides:
   "@modelcontextprotocol/sdk": ">=1.30.0"
   "body-parser": ">=2.2.1"
-  "brace-expansion@<=5.0.7": ">=5.0.8"
+  "brace-expansion@<=5.0.8": ">=5.0.9"
   "glob": ">=10.5.0"
   "js-yaml": ">=4.1.1"
   "path-to-regexp": ">=8.4.0"

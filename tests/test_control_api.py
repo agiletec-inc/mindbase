@@ -11,7 +11,9 @@ from apps.api.services import settings_store
 
 
 @pytest.mark.asyncio
-async def test_control_runs_make_target(async_client: AsyncClient, tmp_path: Path) -> None:
+async def test_control_runs_make_target(
+    async_client: AsyncClient, tmp_path: Path
+) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     makefile = repo_root / "Makefile"

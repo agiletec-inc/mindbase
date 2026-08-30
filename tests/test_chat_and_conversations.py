@@ -62,7 +62,9 @@ async def test_chat_settings_are_single_source_of_truth(async_client):
 
     # ...and every reader reflects it (GET /settings and GET /api/chat/models).
     assert (await async_client.get("/settings")).json()["chatModel"] == "llama3.1:8b"
-    assert (await async_client.get("/api/chat/models")).json()["current"] == "llama3.1:8b"
+    assert (await async_client.get("/api/chat/models")).json()[
+        "current"
+    ] == "llama3.1:8b"
 
 
 async def test_chat_models_lists_installed(async_client):
