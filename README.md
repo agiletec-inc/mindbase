@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 
-> **100 % local, zero vendor lock-in.** PostgreSQL 17 + pgvector + FastAPI + Ollama (default `bge-m3`, switchable to any catalog model — `qwen3-embedding:8b`, `mxbai-embed-large`, … — from Settings). No API keys, no hosted dependencies, completely free to run on your own machine.
+> **Local-first, zero vendor lock-in.** PostgreSQL 17 + pgvector + FastAPI + Ollama (default `bge-m3`, switchable to catalog models such as `qwen3-embedding:8b` and `mxbai-embed-large`). OpenAI Embeddings is also supported as an explicit provider option.
 
 ## 🌟 Part of the AIRIS Ecosystem
 
@@ -56,8 +56,8 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 
 1. **Unified timeline** – Collectors pull logs from editors, desktop clients, terminal agents, and any bespoke transcripts. Everything lands in one ordered ledger so you can replay how a project evolved across assistants.
 2. **Project & topic intelligence** – Stored metadata keeps conversations grouped by project, topic, and source. You can trace a task from brainstorming in Claude Desktop to implementation inside Cursor without manual tagging.
-3. **Semantic memory** – Messages are embedded locally through Ollama (default `bge-m3`, switchable per the model catalog) and stored in pgvector. Vectors from different models coexist per conversation, so you can re-embed and compare models. MindBase becomes the long-term recall layer for AIRIS tools, MCP servers, or any downstream automation.
-4. **Local-first privacy** – Conversations reside only inside your Dockerized PostgreSQL volume. Nothing writes to `~/Library/Application Support` or remote services, so your chat history never leaks into cloud sync folders.
+3. **Semantic memory** – Messages are embedded through the configured provider (Ollama by default; OpenAI is optional) and stored in pgvector. Vectors from different providers and models coexist per conversation, so you can re-embed and compare retrieval quality. MindBase becomes the long-term recall layer for AIRIS tools, MCP servers, or any downstream automation.
+4. **Local-first privacy** – Conversations and embeddings are stored in the Dockerized PostgreSQL volume by default. The optional file-based memory backend stores Markdown memories under the configured `MEMORY_BASE_DIR` (by default `~/Library/Application Support/mindbase/memories`). No cloud sync is required.
 
 ## Architecture overview
 
@@ -91,14 +91,14 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ PostgreSQL 17 + pgvector (Docker volume `postgres_data_dev`)             │
 │  - Structured metadata (projects, topics, sources, timestamps)           │
-│  - Embedding vectors (1024‑dim)                                          │
+│  - Embedding vectors (768 / 1024 / 3072 / 4096‑dim buckets)              │
 └───────────────┬──────────────────────────────────────────────────────────┘
-                │ local embedding calls
+                │ configured embedding provider (Ollama by default)
                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Ollama (default bge-m3 · switchable model)                               │
-│  - Fully on-device                                                       │
-│  - Runs free of charge                                                   │
+│  - Fully on-device by default                                            │
+│  - Optional OpenAI Embeddings provider                                   │
 └───────────────┬──────────────────────────────────────────────────────────┘
                 │ MCP tool bridge
                 ▼
@@ -112,8 +112,10 @@ Because AIRIS only loads tool instructions when the model actually chooses MindB
 
 ## Quick start
 
-Requirements: Docker (OrbStack works), [uv](https://docs.astral.sh/uv/), and a host
-[Ollama](https://ollama.com). The API runs host-native; only Postgres runs in Docker.
+Requirements: Docker (OrbStack works), [uv](https://docs.astral.sh/uv/), and
+[Ollama](https://ollama.com) for the default local provider. The quick start runs
+the API on the host and PostgreSQL in Docker; `compose.yml` also includes optional
+container services for the API and Ollama.
 
 ```bash
 # 1. Clone (adjust the destination if needed)
@@ -126,7 +128,7 @@ cp .env.example .env
 # 3. Install Python deps into one workspace venv (uv reads .python-version → 3.12)
 uv sync --all-packages
 
-# 4. Pull the embedding model once into your host Ollama
+# 4. Pull the default local embedding model once into your host Ollama
 ollama pull bge-m3
 
 # 5. Start Postgres (pgvector). Migrations in supabase/migrations/ apply
@@ -143,7 +145,10 @@ curl -fsS http://localhost:18003/health   # → ok ; interactive docs at /docs
 uv run python -m apps.api.workers.raw_deriver
 ```
 
-All conversation data lives in the PostgreSQL volume declared in `compose.yml` (`postgres_data_dev`). Remove that volume (`docker compose down -v`) when you want a clean slate; nothing is written to random App Support folders.
+Conversation records and embeddings live in the PostgreSQL volume declared in
+`compose.yml` (`postgres_data_dev`). The MCP file-based memory backend may also
+write Markdown memories to `MEMORY_BASE_DIR`. Remove the PostgreSQL volume
+(`docker compose down -v`) when you want a clean database.
 
 ### Menu bar companion ✨ Auto-Collection
 
@@ -213,21 +218,23 @@ Responses include similarity scores, timestamps, metadata, and the original mess
 
 ## Integrations & tooling
 
-- **AIRIS MCP Gateway** – Run `make install` inside the AIRIS repo (or `superclaude install`) to expose `mindbase_search` and `mindbase_store`. The gateway advertises only the selected tool to the LLM, keeping prompts minimal while MindBase delivers embeddings and payloads on demand.
+- **AIRIS MCP Gateway** – Run `make install` inside the AIRIS repo (or `superclaude install`) to expose MindBase's conversation, memory, semantic search, hybrid search, and retrieval-pack tools. The gateway advertises only the selected tool to the LLM, keeping prompts minimal while MindBase delivers embeddings and payloads on demand.
+- **Chat RAG API** – `POST /api/chat` retrieves relevant past conversations with the active embedding provider, adds them to the system context, streams an Ollama chat response, and optionally persists the completed turn.
 - **Collectors (`collectors/`)** – Python scripts and templates that read local caches (Claude, Cursor, ChatGPT, Windsurf, etc.), normalize them, and push JSON to `/conversations/store`. Extend them to cover any other assistant or internal agent you run.
-- **Processors & Generators (`libs/`)** – TypeScript utilities that transform stored conversations into knowledge packs, retrospectives, or other artifacts. They demonstrate how MindBase can power downstream workflows.
+- **Processors & Generators (`libs/`)** – TypeScript utilities that transform stored conversations into knowledge packs, retrospectives, or other artifacts. The MCP retrieval-pack tool budgets excerpts and source metadata for downstream writing workflows.
 - **Schema & migrations (`supabase/`)** – SQL migrations for PostgreSQL live here so the same schema can be applied locally (via Docker) or to a managed Postgres instance. There is no hosted Supabase dependency; the directory simply keeps schema history tidy.
 
 ## Data residency & privacy
 
-- Conversations, embeddings, and metadata stay inside the Docker-managed Postgres volume. Stop the stack with `docker compose down` and the data remains on disk in the `postgres_data_dev` volume.
-- All embeddings are generated locally through Ollama, so you never leak prompts or code to third-party APIs.
-- If you need off-device backups, dump the database (`pg_dump`) or replicate the Docker volume; there is no hidden shadow copy under `~/Library/Application Support`.
+- Conversations, embeddings, and metadata stay inside the Docker-managed Postgres volume by default. Stop the stack with `docker compose down` and the data remains on disk in the `postgres_data_dev` volume.
+- Ollama is the default local embedding provider. If `EMBEDDING_PROVIDER=openai` is selected, embedding inputs are sent to the OpenAI Embeddings API according to that provider configuration.
+- The optional MCP file-based memory backend stores Markdown memories under `MEMORY_BASE_DIR`; this is separate from the conversation store.
+- If you need off-device backups, dump the database (`pg_dump`) or replicate the Docker volume.
 
 ## Roadmap highlights
 
 - More collectors for enterprise chat / ticketing tools.
-- Automated summarization and recap views for long-running projects.
+- Automated Japanese summarization and recap views for long-running projects.
 - MCP-side incremental recall so AIRIS can page in only the slices of memory that the LLM asks for.
 - Fine-grained retention and redaction policies per source.
 - Export pipelines that turn curated threads into blogs, books, or playbooks.
