@@ -235,7 +235,7 @@ Responses include similarity scores, timestamps, metadata, and the original mess
 ## Contributing
 
 1. Fork the repo and create a feature branch.
-2. Follow the style guides in `docs/`, `AGENTS.md`, and `CLAUDE.md`.
+2. Follow the style guides in `AGENTS.md`.
 3. Run the validations before opening a PR:
    ```bash
    uv run pytest tests/ -v

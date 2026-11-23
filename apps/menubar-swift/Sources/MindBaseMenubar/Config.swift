@@ -1,7 +1,7 @@
 import Foundation
 
 /// App configuration loaded from environment variables
-/// Following CLAUDE.md guidelines: NEVER hardcode ports, URLs, or connection strings
+/// Following AGENTS.md guidelines: NEVER hardcode ports, URLs, or connection strings
 enum AppConfig {
     /// Ollama API URL (default: http://localhost:11434)
     static var ollamaURL: String {
