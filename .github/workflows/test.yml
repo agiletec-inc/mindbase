@@ -1,14 +1,26 @@
-name: Test
+name: Python tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    paths: &inputs
+      - "apps/api/**"
+      - "libs/collectors/**"
+      - "tests/**"
+      - "supabase/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/test.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
+    paths: *inputs
+
+permissions:
+  contents: read
 
 jobs:
-  repo-quality-gate:
-    name: repo-quality-gate
+  python-tests:
     runs-on: ubuntu-latest
 
     services:
@@ -35,19 +47,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Install Python dependencies (uv workspace)
         run: uv sync --all-packages
-
-      - name: Install TypeScript dependencies
-        run: pnpm install --no-frozen-lockfile
 
       - name: Lint Python
         run: |
@@ -62,9 +63,6 @@ jobs:
           EMBEDDING_DIMENSIONS: 4096
           SUMMARY_MODEL: qwen3:14b
         run: uv run pytest tests/ -v
-
-      - name: Run TypeScript type check
-        run: pnpm --filter @mindbase/mcp-server typecheck
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
