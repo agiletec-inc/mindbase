@@ -141,6 +141,8 @@ async def test_engine(
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+        migration = Path(__file__).resolve().parents[1] / "supabase/migrations/20261128000000_rank_conversation_embeddings.sql"
+        await conn.exec_driver_sql(migration.read_text())
 
     yield engine
 

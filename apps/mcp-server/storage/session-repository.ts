@@ -5,7 +5,7 @@
  */
 
 import type { Pool } from 'pg';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import type { Session } from './interface.js';
 
 export class SessionRepository {
@@ -13,7 +13,7 @@ export class SessionRepository {
 
   async createSession(name: string, description?: string, parentId?: string): Promise<string> {
     try {
-      const id = uuidv4();
+      const id = randomUUID();
       const query = `
         INSERT INTO sessions (id, name, description, parent_id, created_at, updated_at)
         VALUES ($1, $2, $3, $4, NOW(), NOW())

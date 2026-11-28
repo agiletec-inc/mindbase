@@ -69,62 +69,17 @@ export class SearchService {
   ): Promise<SearchResult[]> {
     try {
       const queryEmbedding = await this.embeddingClient.generate(query);
-      const col = columnForDim(queryEmbedding.length);
-      const provider = this.embeddingClient.getActiveProvider();
-      const model = this.embeddingClient.getActiveModel();
-
-      let semanticW = 1 - recencyWeight;
-      let recencyW = recencyWeight;
-      const sum = semanticW + recencyW;
-      if (sum <= 0) {
-        semanticW = 1 - DEFAULT_WEIGHTS.recency;
-        recencyW = DEFAULT_WEIGHTS.recency;
-      } else {
-        semanticW /= sum;
-        recencyW /= sum;
-      }
-
-      const safeTauSeconds = Math.max(1, recencyTauSeconds);
-      const safeBoostDays = Math.max(0, recencyBoostDays);
-      const safeBoostValue = Math.max(0, Math.min(1, recencyBoostValue));
-
-      const sqlQuery = `
-        SELECT
-          c.*,
-          GREATEST(0, 1 - (e.${col} <=> $1::vector)) AS semantic_score,
-          LEAST(
-            1.0,
-            EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
-            + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6::double precision ELSE 0 END
-          ) AS recency_score,
-          (
-            GREATEST(0, 1 - (e.${col} <=> $1::vector)) * $7
-            + LEAST(
-                1.0,
-                EXP(-EXTRACT(EPOCH FROM (NOW() - COALESCE(c.created_at, to_timestamp(0)))) / $4)
-                + CASE WHEN c.created_at >= NOW() - ($5::int * INTERVAL '1 day') THEN $6::double precision ELSE 0 END
-              ) * $8
-          ) AS combined_score
-        FROM conversation_embeddings e
-        JOIN conversations c ON c.id = e.conversation_id
-        WHERE e.provider = $9 AND e.model = $10 AND e.${col} IS NOT NULL
-          AND GREATEST(0, 1 - (e.${col} <=> $1::vector)) > $2
-        ORDER BY combined_score DESC
-        LIMIT $3
-      `;
-
-      const result = await this.pool.query(sqlQuery, [
-        `[${queryEmbedding.join(',')}]`,
-        threshold,
-        limit,
-        safeTauSeconds,
-        safeBoostDays,
-        safeBoostValue,
-        semanticW,
-        recencyW,
-        provider,
-        model,
-      ]);
+      columnForDim(queryEmbedding.length);
+      const result = await this.pool.query(
+        `SELECT c.*, r.semantic_score, r.recency_score, r.combined_score
+         FROM mindbase_rank_conversation_embeddings($1::vector, $2, $3, $4, $5, $6, $7) r
+         JOIN conversations c ON c.id = r.conversation_id
+         WHERE r.semantic_score > $8
+         ORDER BY r.combined_score DESC LIMIT $9`,
+        [`[${queryEmbedding.join(',')}]`, this.embeddingClient.getActiveProvider(),
+          this.embeddingClient.getActiveModel(), recencyWeight, recencyTauSeconds,
+          recencyBoostDays, recencyBoostValue, threshold, limit],
+      );
 
       return result.rows.map((row) => ({
         item: this.mapRowToItem(row),

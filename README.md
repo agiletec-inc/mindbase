@@ -216,7 +216,7 @@ Responses include similarity scores, timestamps, metadata, and the original mess
 - **AIRIS MCP Gateway** – Run `make install` inside the AIRIS repo (or `superclaude install`) to expose `mindbase_search` and `mindbase_store`. The gateway advertises only the selected tool to the LLM, keeping prompts minimal while MindBase delivers embeddings and payloads on demand.
 - **Collectors (`collectors/`)** – Python scripts and templates that read local caches (Claude, Cursor, ChatGPT, Windsurf, etc.), normalize them, and push JSON to `/conversations/store`. Extend them to cover any other assistant or internal agent you run.
 - **Processors & Generators (`libs/`)** – TypeScript utilities that transform stored conversations into knowledge packs, retrospectives, or other artifacts. They demonstrate how MindBase can power downstream workflows.
-- **Schema & migrations (`supabase/`)** – SQL migrations for PostgreSQL live here so the same schema can be applied locally (via Docker) or to a managed Postgres instance. There is no hosted Supabase dependency; the directory simply keeps schema history tidy.
+- **Schema & migrations (`supabase/`)** – SQL migrations for PostgreSQL live here so the same schema can be applied locally (via Docker) or to a managed Postgres instance. There is no hosted Supabase dependency; the directory simply keeps schema history tidy. Existing databases must apply `supabase/migrations/20261128000000_rank_conversation_embeddings.sql` before updating the API or MCP server. Both use that function for semantic ranking.
 
 ## Data residency & privacy
 

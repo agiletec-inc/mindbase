@@ -130,47 +130,17 @@ async def search_conversation_embeddings(
     recency_boost_days: int = 3,
     recency_boost_value: float = 0.05,
 ):
-    """Search one provider/model's embeddings with recency-weighted ranking.
-
-    Mirrors crud.search.search_conversations' scoring, but scans the
-    per-provider conversation_embeddings table joined back to conversations.
-    """
-    col = column_for_dim(len(query_embedding))
-
-    semantic_w = 1.0 - recency_weight
-    recency_w = recency_weight
-    weight_sum = semantic_w + recency_w
-    if weight_sum <= 0:
-        semantic_w = 1.0 - DEFAULT_RECENCY_WEIGHT
-        recency_w = DEFAULT_RECENCY_WEIGHT
-    else:
-        semantic_w /= weight_sum
-        recency_w /= weight_sum
-
-    safe_tau_seconds = max(1, recency_tau_seconds)
-    safe_boost_days = max(0, recency_boost_days)
-    safe_boost_value = max(0.0, min(1.0, recency_boost_value))
-
-    sim = f"GREATEST(0, 1 - (e.{col} <=> CAST(:embedding AS vector)))"
-    recency = (
-        "LEAST(1.0, EXP(-EXTRACT(EPOCH FROM (NOW() - "
-        "COALESCE(c.created_at, to_timestamp(0)))) / :tau_seconds) + CASE WHEN "
-        "c.created_at >= NOW() - (:boost_days * INTERVAL '1 day') THEN :boost_value "
-        "ELSE 0 END)"
-    )
-
-    query_text = f"""
-    SELECT c.*,
-           {sim} AS semantic_score,
-           {recency} AS recency_score,
-           ({sim} * :semantic_weight + {recency} * :recency_weight) AS combined_score,
-           {sim} AS similarity
-    FROM conversation_embeddings e
-    JOIN conversations c ON c.id = e.conversation_id
-    WHERE e.provider = :provider
-          AND e.model = :model
-          AND e.{col} IS NOT NULL
-          AND {sim} >= :threshold
+    """Filter and return API search results ranked by the shared database function."""
+    column_for_dim(len(query_embedding))
+    query_text = """
+    SELECT c.*, r.semantic_score, r.recency_score, r.combined_score,
+           r.semantic_score AS similarity
+    FROM mindbase_rank_conversation_embeddings(
+        CAST(:embedding AS vector), :provider, :model, :recency_weight,
+        :tau_seconds, :boost_days, :boost_value
+    ) r
+    JOIN conversations c ON c.id = r.conversation_id
+    WHERE r.semantic_score >= :threshold
     """
 
     if source:
@@ -190,11 +160,10 @@ async def search_conversation_embeddings(
         "model": model,
         "threshold": threshold,
         "limit": limit,
-        "tau_seconds": safe_tau_seconds,
-        "boost_days": safe_boost_days,
-        "boost_value": safe_boost_value,
-        "semantic_weight": semantic_w,
-        "recency_weight": recency_w,
+        "tau_seconds": recency_tau_seconds,
+        "boost_days": recency_boost_days,
+        "boost_value": recency_boost_value,
+        "recency_weight": recency_weight,
     }
     if source:
         params["source"] = source

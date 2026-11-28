@@ -6,7 +6,6 @@ from apps.api.crud.conversation import (
     get_conversation,
     list_conversations,
 )
-from apps.api.crud.search import search_conversations
 from apps.api.crud.embeddings import (
     column_for_dim,
     count_conversations_missing_embedding,
@@ -20,7 +19,6 @@ __all__ = [
     "create_conversation_record",
     "get_conversation",
     "list_conversations",
-    "search_conversations",
     "column_for_dim",
     "count_conversations_missing_embedding",
     "list_conversations_missing_embedding",

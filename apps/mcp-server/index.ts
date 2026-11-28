@@ -17,7 +17,7 @@ import { PostgresStorageBackend } from './storage/postgres.js';
 import { FileSystemMemoryBackend } from './storage/memory-fs.js';
 import { ConversationTools } from './tools/conversation.js';
 import { MemoryTools } from './tools/memory.js';
-import { loadConfig } from './config.js';
+import { createStorageClients, loadConfig } from './config.js';
 import { TOOLS } from './tool-registry.js';
 import { createDispatcher, dispatch } from './tool-dispatcher.js';
 
@@ -34,13 +34,9 @@ class MindBaseMCPServer {
       { capabilities: { tools: {} } },
     );
 
-    this.storage = new PostgresStorageBackend(config.databaseUrl, config.ollamaUrl, config.embeddingModel);
-    this.memoryStorage = new FileSystemMemoryBackend(
-      config.memoryBaseDir,
-      config.databaseUrl,
-      config.ollamaUrl,
-      config.embeddingModel,
-    );
+    const { pool, embeddingClient } = createStorageClients(config);
+    this.storage = new PostgresStorageBackend(pool, embeddingClient);
+    this.memoryStorage = new FileSystemMemoryBackend(config.memoryBaseDir, pool, embeddingClient);
 
     const tools = new ConversationTools(this.storage);
     const memoryTools = new MemoryTools(this.memoryStorage);
@@ -94,7 +90,6 @@ class MindBaseMCPServer {
   private async cleanup() {
     console.error('[MindBase MCP] Shutting down...');
     await this.storage.close();
-    await this.memoryStorage.close();
     process.exit(0);
   }
 }

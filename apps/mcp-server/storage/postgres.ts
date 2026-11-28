@@ -9,7 +9,7 @@
  */
 
 import { Pool } from 'pg';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import type {
   StorageBackend,
   ConversationItem,
@@ -28,20 +28,11 @@ import { SessionRepository } from './session-repository.js';
 import { AnalyticsRepository } from './analytics-repository.js';
 
 export class PostgresStorageBackend implements StorageBackend {
-  private pool: Pool;
-  private embeddingClient: EmbeddingClient;
   private searchService: SearchService;
   private sessionRepo: SessionRepository;
   private analyticsRepo: AnalyticsRepository;
 
-  constructor(connectionString: string, ollamaUrl: string, embeddingModel: string) {
-    this.pool = new Pool({ connectionString });
-    this.embeddingClient = new EmbeddingClient({
-      ollamaUrl,
-      embeddingModel,
-      openaiApiKey: process.env.OPENAI_API_KEY || undefined,
-      openaiModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
-    });
+  constructor(private readonly pool: Pool, private readonly embeddingClient: EmbeddingClient) {
     this.searchService = new SearchService(this.pool, this.embeddingClient, this.mapRowToItem);
     this.sessionRepo = new SessionRepository(this.pool);
     this.analyticsRepo = new AnalyticsRepository(this.pool);
@@ -55,7 +46,7 @@ export class PostgresStorageBackend implements StorageBackend {
 
   async save(item: ConversationItem): Promise<string> {
     try {
-      const id = item.id || uuidv4();
+      const id = item.id || randomUUID();
 
       let embedding = item.embedding;
       if (!embedding && item.content) {
