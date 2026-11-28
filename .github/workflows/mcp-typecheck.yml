@@ -1,0 +1,42 @@
+name: MCP typecheck
+
+on:
+  push:
+    branches: [main]
+    paths: &inputs
+      - "apps/mcp-server/**"
+      - "libs/embedding/**"
+      - "libs/generators/**"
+      - "libs/markdown/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".npmrc"
+      - ".github/workflows/mcp-typecheck.yml"
+  pull_request:
+    branches: [main]
+    paths: *inputs
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install TypeScript dependencies
+        run: pnpm --filter @mindbase/mcp-server install --frozen-lockfile
+
+      - name: Run TypeScript type check
+        run: pnpm --filter @mindbase/mcp-server typecheck
