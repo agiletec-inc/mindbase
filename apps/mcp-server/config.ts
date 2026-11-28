@@ -1,3 +1,6 @@
+import { Pool } from 'pg';
+import { EmbeddingClient } from '../../libs/embedding/embedding-client.js';
+
 /**
  * MindBase MCP Server - Configuration
  *
@@ -38,5 +41,17 @@ export function loadConfig(): MCPServerConfig {
     memoryBaseDir: process.env.MEMORY_BASE_DIR,
     openaiApiKey: process.env.OPENAI_API_KEY || undefined,
     openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
+  };
+}
+
+export function createStorageClients(config: MCPServerConfig) {
+  return {
+    pool: new Pool({ connectionString: config.databaseUrl }),
+    embeddingClient: new EmbeddingClient({
+      ollamaUrl: config.ollamaUrl,
+      embeddingModel: config.embeddingModel,
+      openaiApiKey: config.openaiApiKey,
+      openaiModel: config.openaiEmbeddingModel,
+    }),
   };
 }

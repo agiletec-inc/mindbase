@@ -16,36 +16,20 @@ import { MemoryDBRepository } from './memory-db-repository.js';
 
 export class FileSystemMemoryBackend implements MemoryStorageBackend {
   private baseDir: string;
-  private pool?: Pool;
-  private embeddingClient?: EmbeddingClient;
   private dbRepo?: MemoryDBRepository;
 
   constructor(
     baseDir?: string,
-    connectionString?: string,
-    ollamaUrl?: string,
-    embeddingModel?: string,
+    pool?: Pool,
+    private readonly embeddingClient?: EmbeddingClient,
   ) {
     this.baseDir =
       baseDir || join(homedir(), 'Library', 'Application Support', 'mindbase', 'memories');
 
-    if (connectionString) {
-      this.pool = new Pool({ connectionString });
-    }
-
-    if (ollamaUrl && embeddingModel) {
-      this.embeddingClient = new EmbeddingClient({
-        ollamaUrl,
-        embeddingModel,
-        openaiApiKey: process.env.OPENAI_API_KEY || undefined,
-        openaiModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
-      });
-    }
-
-    if (this.pool && this.embeddingClient) {
+    if (pool && embeddingClient) {
       this.dbRepo = new MemoryDBRepository(
-        this.pool,
-        this.embeddingClient,
+        pool,
+        embeddingClient,
         (name, project) => this.getMemoryPath(name, project),
       );
     }
@@ -201,9 +185,4 @@ export class FileSystemMemoryBackend implements MemoryStorageBackend {
     return this.dbRepo.searchMemories(query, options);
   }
 
-  async close(): Promise<void> {
-    if (this.pool) {
-      await this.pool.end();
-    }
-  }
 }
